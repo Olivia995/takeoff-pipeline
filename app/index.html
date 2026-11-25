@@ -1554,7 +1554,10 @@ function renderPop(){
     ty.onchange=()=>{ pushHist(); d.type=ty.value; renderAll(); };
     const ada=document.createElement("button"); ada.textContent='42"'; ada.title="Make it a standard 42\" ADA opening";
     ada.onclick=()=>{ d.centred=true; setAccLen(d,3.5); };
-    pop.append(lab,len,ty,ada,del);
+    const side=document.createElement("button"); side.textContent="⇅ Side"; side.title="Put the transition on the other side of the opening (e.g. where a door would swing into it)";
+    if(d.flip) side.style.fontWeight="700";
+    side.onclick=()=>{ pushHist(); d.flip=!d.flip; renderAll(); flash(d.flip?"Transition moved to the other side.":"Transition back on its usual side.",3000); };
+    pop.append(lab,len,ty,ada,side,del);
   } else if(o.kind==="barrier"){
     lab.textContent="Closed opening"; const s=document.createElement("span"); s.className="muted"; s.textContent=fmtLen(lenFt(d[0],d[1]));
     pop.append(lab,s,del);
@@ -1609,6 +1612,10 @@ function renderOverlay(){
   if(S.tool==="column" && S.colStart && hv){ const a=S.colStart, b=hv;
     h+=`<rect class="coldraft" x="${Math.min(a[0],b[0])}" y="${Math.min(a[1],b[1])}" width="${Math.abs(b[0]-a[0])}" height="${Math.abs(b[1]-a[1])}"/>`;
     if(S.pxPerFt) h+=`<text class="mlabel" x="${(a[0]+b[0])/2}" y="${Math.min(a[1],b[1])}" dy="${-0.5*fs}" font-size="${fs*0.9}" stroke-width="${3/z}" text-anchor="middle">${fmtLen(Math.abs(b[0]-a[0])/S.pxPerFt)} × ${fmtLen(Math.abs(b[1]-a[1])/S.pxPerFt)}</text>`; }
+  // where each transition will sit (from the last takeoff): shaded, so the side is visible
+  if(S.slab!=="recessed") for(const r of S.rampInfo||[]){ const R=S.renderScale;
+    for(const [k,poly] of r.shapes||[]){ const c=k.startsWith("ada")?"#D0453A":k==="landing"?"#7CB342":"#00838F";
+      h+=`<polygon points="${poly.map(([x,y])=>(x*R)+","+(y*R)).join(" ")}" fill="${c}" fill-opacity=".38" stroke="${c}" stroke-opacity=".8" stroke-width="1.5" vector-effect="non-scaling-stroke" style="pointer-events:none"/>`; } }
   for(const [i,x] of S.access.entries()){ if(S.slab==="recessed") break;
     const c=x.type==="ada"?"#D0453A":"#00838F", mx=(x.a[0]+x.b[0])/2, my=(x.a[1]+x.b[1])/2;
     h+=`<line x1="${x.a[0]}" y1="${x.a[1]}" x2="${x.b[0]}" y2="${x.b[1]}" stroke="${c}" stroke-width="4" stroke-linecap="butt" vector-effect="non-scaling-stroke" opacity=".9"/>`;
@@ -1708,7 +1715,7 @@ function transitionsPayload(){
   return {slab:S.slab, recess_mm:S.slab==="partial"?(parseFloat($("recessIn").value)||0):0,
     no_transitions_date:$("noTrDate").value||null, no_ada_date:$("noAdaDate").value||null,
     openings:S.slab==="recessed"?[]:S.access.map(x=>({a:[+(x.a[0]/R).toFixed(2),+(x.a[1]/R).toFixed(2)], b:[+(x.b[0]/R).toFixed(2),+(x.b[1]/R).toFixed(2)],
-      type:x.type, sides:x.sides??2, ada_width:x.adaWidth||"full", landing:!!x.landing}))};
+      type:x.type, sides:x.sides??2, ada_width:x.adaWidth||"full", landing:!!x.landing, flip:!!x.flip}))};
 }
 function takeoffParams(){ return {in_per_ft:inPerFt(), manual_notes:[...S.manualOn], transitions:transitionsPayload()}; }
 function distToRing(p,pts){ let best=1e18; for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];
@@ -1792,7 +1799,7 @@ function renderTakeoff(){
     try{
       const d=await api("/api/takeoff",{...takeoffParams(), rooms:roomsPayload().filter((r,i)=>r.included && r.layers.length && r.layers.every(l=>l.code))});
       if(seq!==tkSeq) return;
-      S.lastLines=d.lines; S.rampInfo=d.ramps||[]; renderAccess();
+      S.lastLines=d.lines; S.rampInfo=d.ramps||[]; renderAccess(); renderOverlay();
       const left=all.length-ready.length;
       tb.className="tblock"; tb.innerHTML=d.lines.map(l=>`<span class="l">${esc(l)}</span>`).join("")+
         `<span class="l" style="font-family:Archivo,sans-serif;font-size:12.5px;color:var(--muted);margin-top:4px">${ready.length} room${ready.length===1?"":"s"}, ${Math.round(d.net_sf).toLocaleString()} SF net${left?` · ${left} still need a buildup`:""}</span>`;
@@ -2057,7 +2064,7 @@ $("importFile").onchange=async e=>{
     const tk=data.takeoff||{}, map={system:"system",overage:"overage",project:"project",dwg:"dwg",drawn_by:"drawnBy",date:"date"};
     for(const [k,id] of Object.entries(map)) if(tk[k]!=null && tk[k]!=="") $(id).value=tk[k];
     const tr=tk.transitions||{};
-    S.access=(tr.openings||data.access_pt||[]).map(x=>({a:[x.a[0]*R,x.a[1]*R], b:[x.b[0]*R,x.b[1]*R], type:x.type||"std", sides:x.sides??2, adaWidth:x.ada_width||"full", landing:!!x.landing}));
+    S.access=(tr.openings||data.access_pt||[]).map(x=>({a:[x.a[0]*R,x.a[1]*R], b:[x.b[0]*R,x.b[1]*R], type:x.type||"std", sides:x.sides??2, adaWidth:x.ada_width||"full", landing:!!x.landing, flip:!!x.flip}));
     $("recessIn").value=tr.recess_mm||(tr.recess_in?Math.round(tr.recess_in*25.4):""); $("noTrDate").value=tr.no_transitions_date||""; $("noAdaDate").value=tr.no_ada_date||"";
     setSlab(tr.slab||(S.access.length?"raised":"recessed"));
     S.nextId=Math.max(0,...S.rooms.map(r=>r.id))+1; S.activeId=null; renderAll();

@@ -255,7 +255,7 @@ def compute(cat, rooms, manual_notes=(), transitions=None, pt_per_ft=None):
             from .sheet import ramp_shapes
             for x in res.ramps["ramps"]:
                 i = x.get("room_index", -1)
-                if x.get("a") and 0 <= i < len(rooms) and rooms[i].get("outline_pt"):
+                if x.get("a") and not x.get("outside") and 0 <= i < len(rooms) and rooms[i].get("outline_pt"):
                     sf = sum(_poly_area(p) for _k, p in ramp_shapes(x, pt_per_ft)) / pt_per_ft ** 2
                     sf = min(sf, rooms[i]["area_sf"])
                     rooms[i]["ramps_sf"] = rooms[i].get("ramps_sf", 0) + sf

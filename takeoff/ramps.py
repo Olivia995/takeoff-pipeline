@@ -160,7 +160,7 @@ def _joins(ramps, ppf, rooms=None):
         r["corner_a"] = r["corner_b"] = False
         r["std_at_a"] = r["std_at_b"] = False
     for r in ramps:
-        if r["ada"] or not r.get("a") or r.get("landing_in"):
+        if r["ada"] or not r.get("a") or r.get("landing_in") or r.get("outside"):
             continue
         ra, rb = r["a"], r["b"]
         L = math.dist(ra, rb) or 1.0
@@ -331,6 +331,14 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             extra = [l["code"] for l in rooms[hi]["_calc"][1:] if l["code"] not in lo_codes]
             if extra:
                 over = " and ".join(P[c].get("display") or c for c in extra if c in P) or None
+        outside = False
+        if o.get("flip"):
+            # the drafter's choice: the ramp on the other side of the opening (e.g. a closet
+            # door would swing into it on the lower side)
+            if lo is not None:
+                sit, nrm, over, extra = hi, normal, None, []     # on the higher room's floor
+            else:
+                nrm, outside = (-normal[0], -normal[1]), True     # out onto the slab
         sfx = "-over-" + over if over else ""
         scale = tier_scale(h, tiers, 30 if series == "FIT30" else 70)
         ada = o.get("type") == "ada" and not settings.get("no_ada")
@@ -343,7 +351,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
         # which sides of an ADA ramp get a wing: the drafter's choice, less any side where the
         # ramp ends at a corner of the room (a wing there would hang outside the room)
         wing_l, wing_r = n_sides == 2, n_sides >= 1
-        if ada and "a" in o and rooms[sit].get("outline_pt") and not o.get("landing"):
+        if ada and "a" in o and rooms[sit].get("outline_pt") and not o.get("landing") and not outside:
             ppf = pt_per_ft or 1.0
             (ax, ay), (bx, by) = o["a"], o["b"]
             Lp = math.hypot(bx - ax, by - ay) or 1.0
@@ -421,7 +429,8 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
                              "landing_sf": round(landing, 1), "landing_in": land_in, "n_ada": n_ada if ada else 0, "ada_width": "full" if full else "one",
                              "depth_in": depth, "tier_scale": scale,
                              "label_std": f"{series}-std-1{sfx}", "label_ada": f"{series}-ada-1{sfx}",
-                             "label_std_wb": f"{series}-std-{tiers - 1}-wb", "label_ada_wb": f"{series}-ada-{tiers - 1}-wb"})
+                             "label_std_wb": f"{series}-std-{tiers - 1}-wb", "label_ada_wb": f"{series}-ada-{tiers - 1}-wb",
+                             "flip": bool(o.get("flip")), "outside": outside})
 
     _joins(out["ramps"], pt_per_ft or 1.0, rooms)
     # a standard ramp ending at a door jamb (no wall or other ramp to stop against) is cut back

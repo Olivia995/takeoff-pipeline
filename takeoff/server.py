@@ -423,9 +423,17 @@ def _takeoff(body):
 
 def api_takeoff(_q, body):
     _cat, t, _rooms = _takeoff(body)
+    from .sheet import ramp_shapes
+    ppf = pt_per_ft(float(body["in_per_ft"]))
+
+    def shapes(x):                                   # where the transition sits, for the editor
+        try:
+            return [[k, [[round(p[0], 2), round(p[1], 2)] for p in poly]] for k, poly in ramp_shapes(x, ppf)] if x.get("a") else []
+        except Exception:
+            return []
     return {"lines": [ln.text() for ln in t.lines], "notes": t.notes, "note_ids": t.note_ids,
             "warnings": t.warnings, "net_sf": t.net_sf,
-            "ramps": [{k: v for k, v in x.items() if k not in ("a", "b", "normal", "depth_in")}
+            "ramps": [dict({k: v for k, v in x.items() if k not in ("a", "b", "normal", "depth_in")}, shapes=shapes(x))
                       for x in (t.ramps or {}).get("ramps", [])],
             "groups": [{k: g[k] for k in ("key", "layers", "callout", "rooms", "net_sf", "thickness_mm")}
                        for g in t.groups]}
