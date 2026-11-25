@@ -942,7 +942,7 @@ const TOOL_HINTS={
   pan:"Drag to move around. Scroll to zoom.",
   click:"Click inside a room to trace it from the wall lines.",
   aipick:"Click inside each room you want Claude to trace (one click per room). Enter traces them; Backspace removes the last click; W reads the whole sheet instead; Esc cancels.",
-  draw:"Click the room's corners: between two corners on the same wall the edge follows the wall face for you (pilasters, jogs, recesses), so you only click where the outline turns away from a wall, e.g. at each door jamb. Click the first point, double-click, or press Enter to finish. Shift = straight square edge, Alt = free point, no tracing. Cmd/Ctrl-Z undoes the last corner. Esc cancels.",
+  draw:"Click the room's corners: each edge is a straight line between your clicks. Corners snap to the drawing's lines. Click the first point, double-click, or press Enter to finish. Shift = square edge, Alt = free point (no snapping). Cmd/Ctrl-Z undoes the last corner. Esc cancels.",
   barrier:"Click two points across a doorway or opening to close it, then detect again. After the first click you can type a length (e.g. 3'6) and press Enter. Click a closed opening to select it; Delete removes it.",
   cal:"Click both ends of a dimension you know, then enter its length.",
   access:"Double-click on a room's edge for a standard 42\" ADA opening there, or click both ends of an opening for a custom width. After the first click you can type a length instead (42\" or 3'6, plain numbers are feet) and press Enter. Click a transition to select it: drag its ends, type a new length, or press Delete. Cmd/Ctrl-Z undoes.",
@@ -1364,8 +1364,10 @@ function finishExclude(){
   host.holes=(host.holes||[]).concat([hole]); S.activeId=host.id; S.draft=[]; renderAll();
   flash(`Exclusion of ${sf(polyArea(hole))!=null?Math.round(sf(polyArea(hole))*10)/10+" SF ":""}taken out of ${host.name}. Drag its corners to adjust; Alt-click inside it with the select tool to remove it.`,7000);
 }
-// the wall face between two corners being drawn: the points in between, or null (straight)
+// Drawn edges are straight between the corners you click (wall-following between corners was
+// removed: it wrapped round symbols and tags on the wall). Always null = straight.
 async function traceInto(a,b){
+  return null;
   if(!S.plan || !S.pxPerFt) return null;
   const R=S.renderScale;
   try{
