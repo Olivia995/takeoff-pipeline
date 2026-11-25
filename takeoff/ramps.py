@@ -144,7 +144,7 @@ def _depths(x):
     return x["depth_in"]["standard"] * sum(scale), x["depth_in"]["ada"] * sum(scale)
 
 
-def _joins(ramps, ppf, rooms=None):
+def _joins(ramps, ppf, rooms=None, wall_at=None):
     """How each end of a standard ramp is cut, as drafted (Lifetime Sky LFS-3 DWG):
     - into the next standard ramp: mitred at a square corner; at a slanted wall the straighter
       run ends square and the slanted one meets it; square where the edge carries straight on
@@ -200,6 +200,12 @@ def _joins(ramps, ppf, rooms=None):
                 r["cut_" + end] = cut
                 break
             else:
+                out_u = (-u[0], -u[1]) if end == "a" else u
+                if wall_at and _wall_beyond(wall_at, pt, out_u, n, W, ft):
+                    # a wall drawn just past the end, on the ramp's side: butt into it, no wing
+                    # (whatever the room's outline does there, e.g. drawn over the wall)
+                    r["cut_" + end] = [pt, (pt[0] + n[0], pt[1] + n[1])]
+                    continue
                 ring = rooms[r["room_index"]].get("outline_pt") if rooms and 0 <= r["room_index"] < len(rooms) else None
                 if not ring:
                     continue
@@ -212,6 +218,21 @@ def _joins(ramps, ppf, rooms=None):
                     # of a wall pier): cut back with its triangle, but no piece is ordered for it
                     # (Cottages Cardio, Maroon Creek: however the outline is traced there)
                     r["corner_" + end] = True
+
+
+def _wall_beyond(wall_at, pt, out, n, W, ft):
+    """Is the ramp's end up against a wall drawn on the plan? Wall past the end both 3" and 8"
+    out, across most of the ramp's depth on its side (n): at least two of 1/4, 1/2, 3/4 depth.
+    A thin door leaf standing open at the jamb only covers an inch or two, so it doesn't count."""
+    hits = 0
+    for f in (0.25, 0.5, 0.75):
+        ok = True
+        for d in (3, 8):
+            x = pt[0] + out[0] * d * ft + n[0] * W * f
+            y = pt[1] + out[1] * d * ft + n[1] * W * f
+            ok = ok and bool(wall_at(x, y))
+        hits += ok
+    return hits >= 2
 
 
 def _edge_carries_on(ring, pt, out, n, ft):
@@ -359,9 +380,12 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             ix, iy = -nrm[0], -nrm[1]
             s = 4 / 12 * ppf                          # 4" past the end, 4" into the room
             ring = rooms[sit]["outline_pt"]
-            if wing_l and not point_in_polygon(ax - ux * s + ix * s, ay - uy * s + iy * s, ring):
+            wall_at = settings.get("wall_at")
+            if wing_l and (not point_in_polygon(ax - ux * s + ix * s, ay - uy * s + iy * s, ring)
+                           or (wall_at and wall_at(ax - ux * s + ix * s, ay - uy * s + iy * s))):
                 wing_l = False
-            if wing_r and not point_in_polygon(bx + ux * s + ix * s, by + uy * s + iy * s, ring):
+            if wing_r and (not point_in_polygon(bx + ux * s + ix * s, by + uy * s + iy * s, ring)
+                           or (wall_at and wall_at(bx + ux * s + ix * s, by + uy * s + iy * s))):
                 wing_r = False
             n_sides = int(wing_l) + int(wing_r)
         if ada:
@@ -432,7 +456,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
                              "label_std_wb": f"{series}-std-{tiers - 1}-wb", "label_ada_wb": f"{series}-ada-{tiers - 1}-wb",
                              "flip": bool(o.get("flip")), "outside": outside})
 
-    _joins(out["ramps"], pt_per_ft or 1.0, rooms)
+    _joins(out["ramps"], pt_per_ft or 1.0, rooms, settings.get("wall_at"))
     # a standard ramp ending at a door jamb (no wall or other ramp to stop against) is cut back
     # at 45 degrees and finished with a triangle; a run's triangles (one or both ends) are cut
     # from one extra piece per tier (Cottages Cardio: 6 runs + 2 pieces of ADA wings + 2 runs

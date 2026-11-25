@@ -406,6 +406,37 @@ def _claude_borders(page, ppf, rooms, ai_rooms):
             "cost_usd": round(cost, 4) if cost is not None else None, "rough": rough}
 
 
+_WALL_IMG = {}
+
+
+def _wall_test(plan, page_no, ppf):
+    """wall_at(x, y): is the plan drawn dark (wall poché or wall lines) around that point (PDF
+    points)? Judged from the rendered page, i.e. what the drawing looks like: hidden fills and
+    pale hatching don't count. None if the plan can't be read."""
+    try:
+        key = (plan, page_no)
+        if key not in _WALL_IMG:
+            _doc, page = _open_page(plan, page_no)
+            s = min(2.0, (30e6 / (page.rect.width * page.rect.height)) ** 0.5)
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(s, s), colorspace=pymupdf.csGRAY, alpha=False)
+            import numpy as np
+            img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width)
+            _WALL_IMG.clear()
+            _WALL_IMG[key] = (img < 150, s)
+        dark, s = _WALL_IMG[key]
+        H, W = dark.shape
+        r = max(1, int(round(2 / 12 * ppf * s)))
+
+        def wall_at(x, y):
+            X, Y = int(x * s), int(y * s)
+            if not (0 <= X < W and 0 <= Y < H):
+                return False
+            return bool(dark[max(0, Y - r):Y + r + 1, max(0, X - r):X + r + 1].mean() > 0.5)
+        return wall_at
+    except Exception:
+        return None
+
+
 def _takeoff(body):
     """body: rooms (included, each with outline_pt, holes_pt, layers top first,
     finish_adhesive_by_pliteq), in_per_ft, manual_notes."""
@@ -414,8 +445,11 @@ def _takeoff(body):
     rooms = _engine_rooms([r for r in body.get("rooms", []) if r.get("included") is True], ppf)
     if not rooms:
         raise ApiError("No rooms are selected.")
+    T = body.get("transitions")
+    if T and body.get("plan") and T.get("openings"):
+        T = dict(T, _wall_at=_wall_test(body["plan"], int(body.get("page", 1)), ppf))
     try:
-        t = engine.compute(cat, rooms, body.get("manual_notes") or [], transitions=body.get("transitions"), pt_per_ft=ppf)
+        t = engine.compute(cat, rooms, body.get("manual_notes") or [], transitions=T, pt_per_ft=ppf)
     except engine.TakeoffError as e:
         raise ApiError(str(e))
     return cat, t, rooms

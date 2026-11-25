@@ -246,7 +246,7 @@ def compute(cat, rooms, manual_notes=(), transitions=None, pt_per_ft=None):
     if ramped:
         res.ramps = ramps_mod.plan(cat, rooms, T.get("openings") or [],
                                    {"recess_mm": _recess_mm(T) if slab == "partial" else 0,
-                                    "no_ada": bool(T.get("no_ada_date"))}, pt_per_ft)
+                                    "no_ada": bool(T.get("no_ada_date")), "wall_at": T.get("_wall_at")}, pt_per_ft)
         res.warnings += res.ramps["warnings"]
         # The ramps (and any FIT08 landing) sit inside a room drawn to its walls, where the
         # buildup isn't, so their footprint comes off the room's SF (Lifetime Sky LFS-3:
