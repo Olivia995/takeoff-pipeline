@@ -1,0 +1,218 @@
+{
+  "source": "/Users/oliviadinardo/Pliteq-Takeoffs/takeoff-pipeline/plans/Copy-of-Cottages-Cardio-Pull.pdf",
+  "page": 1,
+  "scale": {
+    "label": "calibrated",
+    "in_per_ft": 0.09761882874064279,
+    "pt_per_ft": 7.0285556693262805
+  },
+  "barriers_pt": [],
+  "takeoff": {
+    "project": "Test",
+    "dwg": "test",
+    "drawn_by": "",
+    "date": "2026-11-24",
+    "manual_notes": [],
+    "transitions": {
+      "slab": "raised",
+      "recess_mm": 0,
+      "no_transitions_date": null,
+      "no_ada_date": null,
+      "openings": [
+        {
+          "a": [
+            385.2,
+            215.88
+          ],
+          "b": [
+            409.8,
+            215.88
+          ],
+          "type": "ada",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            304.56,
+            215.88
+          ],
+          "b": [
+            384.96,
+            215.88
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            465.6,
+            241.32
+          ],
+          "b": [
+            465.6,
+            272.52
+          ],
+          "type": "ada",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            439.56,
+            301.32
+          ],
+          "b": [
+            465.6,
+            301.15
+          ],
+          "type": "ada",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            283.08,
+            301.32
+          ],
+          "b": [
+            248.4,
+            301.05
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            248.4,
+            236.28
+          ],
+          "b": [
+            248.4,
+            257.88
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        }
+      ]
+    }
+  },
+  "rooms": [
+    {
+      "id": 1,
+      "name": "Room 1 \u00b7 A",
+      "number": null,
+      "included": true,
+      "area_sf": 757.8,
+      "outline_pt": [
+        [
+          305.35,
+          215.88
+        ],
+        [
+          305.52,
+          215.88
+        ],
+        [
+          409.8,
+          215.88
+        ],
+        [
+          409.8,
+          215.88
+        ],
+        [
+          466.56,
+          215.88
+        ],
+        [
+          466.56,
+          44.28
+        ],
+        [
+          248.4,
+          44.28
+        ],
+        [
+          248.4,
+          215.88
+        ],
+        [
+          305.35,
+          215.88
+        ]
+      ],
+      "holes_pt": [],
+      "layers": [
+        {
+          "code": "FIT30"
+        },
+        {
+          "code": "FFNC25NBN"
+        }
+      ],
+      "finish_adhesive_by_pliteq": false
+    },
+    {
+      "id": 2,
+      "name": "Room 1 \u00b7 B",
+      "number": null,
+      "included": true,
+      "area_sf": 334.9,
+      "outline_pt": [
+        [
+          409.8,
+          215.88
+        ],
+        [
+          305.52,
+          215.88
+        ],
+        [
+          305.35,
+          215.88
+        ],
+        [
+          305.35,
+          233.28
+        ],
+        [
+          248.52,
+          233.28
+        ],
+        [
+          248.52,
+          301.32
+        ],
+        [
+          465.6,
+          301.32
+        ],
+        [
+          465.6,
+          234.02
+        ],
+        [
+          409.8,
+          234.02
+        ]
+      ],
+      "holes_pt": [],
+      "layers": [
+        {
+          "code": "FIT30"
+        }
+      ],
+      "finish_adhesive_by_pliteq": false
+    }
+  ]
+}

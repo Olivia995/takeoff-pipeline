@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pliteq Takeoffs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --edit:#FF00B4;
+  --bg:#E9ECEC; --surface:#FFFFFF; --sunk:#F3F5F5; --ink:#1C2326; --muted:#5B676D; --line:#CFD6D8;
+  --accent:#E59A0B; --accent-ink:#3A2600; --accent-wash:rgba(229,154,11,.28);
+  --cand:#2F6C8F; --cand-wash:rgba(47,108,143,.10); --danger:#B3261E; --barrier:#C2185B;
+  --canvas-bg:#D9DEDF;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121618; --surface:#1B2124; --sunk:#161B1D; --ink:#E4EAEC; --muted:#93A0A6; --line:#2E373B;
+    --accent:#F0AE2E; --accent-ink:#2A1B00; --accent-wash:rgba(240,174,46,.30);
+    --cand:#6FAFD3; --cand-wash:rgba(111,175,211,.12); --danger:#F2867D; --barrier:#F06292;
+    --canvas-bg:#0D1011; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121618; --surface:#1B2124; --sunk:#161B1D; --ink:#E4EAEC; --muted:#93A0A6; --line:#2E373B;
+  --accent:#F0AE2E; --accent-ink:#2A1B00; --accent-wash:rgba(240,174,46,.30);
+  --cand:#6FAFD3; --cand-wash:rgba(111,175,211,.12); --danger:#F2867D; --barrier:#F06292;
+  --canvas-bg:#0D1011; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none!important}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.45;display:flex;flex-direction:column;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* top bar */
+.bar{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:700;font-stretch:80%;font-size:17px;letter-spacing:-.01em;margin-right:6px;white-space:nowrap}
+.brand small{display:block;font-weight:400;font-stretch:100%;font-size:12px;color:var(--muted);letter-spacing:0}
+.bar .grp{display:flex;align-items:center;gap:8px}
+.bar label{color:var(--muted);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--sunk);padding:7px 12px;border-radius:6px;line-height:1.2}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+select,input[type=text],input[type=number]{border:1px solid var(--line);background:var(--sunk);border-radius:6px;padding:6px 8px}
+.scale-state{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.spacer{flex:1}
+
+/* work area */
+.work{flex:1;display:grid;grid-template-columns:56px 1fr 380px;min-height:0}
+.tools{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px}
+.tool{width:40px;height:40px;border-radius:8px;border:1px solid transparent;background:none;display:grid;place-items:center;position:relative}
+.tool svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tool:hover{background:var(--sunk)}
+.tool[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool .k{position:absolute;right:3px;bottom:1px;font-size:9px;opacity:.6}
+.tools hr{width:28px;border:0;border-top:1px solid var(--line);margin:6px 0}
+
+.viewport{position:relative;overflow:hidden;background:var(--canvas-bg);touch-action:none;user-select:none;-webkit-user-select:none}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0}
+#plan{display:block;background:#fff}
+#ov{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;pointer-events:none}
+.viewport.t-pan{cursor:grab}.viewport.panning{cursor:grabbing}
+.viewport.t-click,.viewport.t-aipick,.viewport.t-draw,.viewport.t-barrier,.viewport.t-cal,.viewport.t-measure,.viewport.t-column,.viewport.t-round,.viewport.t-exclude{cursor:crosshair}
+.meas{fill:none;stroke:#7B1FA2;stroke-width:2;vector-effect:non-scaling-stroke}
+.meas.area{fill:rgba(123,31,162,.10)}
+.meas-dot{fill:#7B1FA2}
+.mlabel{fill:#4A148C;paint-order:stroke;stroke:#fff;stroke-linejoin:round;font-weight:700;pointer-events:none}
+.elabel{fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-linejoin:round;font-weight:600;pointer-events:none;opacity:.9}
+
+.room{fill:var(--cand-wash);fill-opacity:.6;stroke:var(--cand);stroke-width:1;vector-effect:non-scaling-stroke;stroke-linejoin:miter}
+.room.inc{fill:var(--accent-wash);fill-opacity:.5;stroke:var(--accent);stroke-width:1}
+.room.active{fill:var(--edit);fill-opacity:.12;stroke:var(--edit);stroke-width:1}
+.handle.col{stroke:var(--edit)}
+.snapmark{fill:none;stroke:#00A86B;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.coldraft{fill:rgba(47,108,143,.15);stroke:var(--cand);stroke-width:1.25;vector-effect:non-scaling-stroke;stroke-dasharray:3 2}
+#hires{position:absolute;left:0;top:0;pointer-events:none;max-width:none}
+.rlabel{fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-linejoin:round;font-weight:600;pointer-events:none}
+.rlabel tspan.a{font-weight:400}
+.barrier{stroke:var(--barrier);stroke-width:3;vector-effect:non-scaling-stroke;stroke-linecap:round}
+.draft{fill:none;stroke:var(--edit);stroke-width:1;vector-effect:non-scaling-stroke}
+.cal{stroke:#1E88E5;stroke-width:2;vector-effect:non-scaling-stroke}
+.handle{fill:#fff;fill-opacity:.25;stroke:var(--edit);stroke-width:1;vector-effect:non-scaling-stroke}
+.hdot{fill:var(--edit)}
+.selhalo{fill:none;stroke:#FFB300;stroke-width:9;stroke-opacity:.45;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+.selend{fill:#fff;stroke:#E65100;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.typed{fill:#E65100;paint-order:stroke;stroke:#fff;stroke-linejoin:round;font-weight:700;pointer-events:none}
+.objpop{position:absolute;z-index:5;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;white-space:nowrap;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12.5px;box-shadow:0 3px 14px rgba(0,0,0,.16);user-select:none}
+.objpop b{font-weight:600}
+.objpop input{width:78px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink)}
+.objpop select{font:inherit;padding:2px 4px}
+.objpop button{font:inherit;padding:3px 8px;border-radius:5px;border:1px solid var(--line);background:var(--sunk);color:var(--ink);cursor:pointer}
+.objpop button.danger{color:#B3261E;border-color:#E3B6B2}
+.objpop .muted{color:var(--muted)}
+.lenIn{width:60px;font:inherit;font-size:12px;padding:1px 4px;margin-right:4px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
+
+.empty{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center}
+.empty .drop{max-width:440px;border:2px dashed var(--line);border-radius:14px;padding:36px 28px;background:color-mix(in srgb,var(--surface) 80%,transparent)}
+.empty h1{font-stretch:80%;font-size:26px;line-height:1.15;margin:0 0 8px;letter-spacing:-.01em}
+.empty p{color:var(--muted);margin:0 0 18px}
+.viewport.dragover .drop{border-color:var(--accent)}
+.hint{position:absolute;left:12px;bottom:12px;max-width:min(520px,calc(100% - 24px));background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.hint:empty{display:none}
+.busy{position:absolute;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--canvas-bg) 60%,transparent);font-weight:600}
+.busy.on{display:grid}
+.zoom{position:absolute;right:12px;top:12px;display:flex;gap:4px}
+.zoom button{width:34px;height:34px;border-radius:6px;border:1px solid var(--line);background:var(--surface)}
+
+/* panel */
+.panel{background:var(--surface);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+.sec h2{font-size:15px;font-weight:650;font-stretch:85%;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.sec h2 .n{color:var(--muted);font-weight:400;font-stretch:100%}
+.sec h2 .act{margin-left:auto;display:flex;gap:6px}
+.link{background:none;border:0;padding:0;color:var(--cand);font-size:13px;text-decoration:underline;text-underline-offset:2px}
+details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:10px}
+.field{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-top:10px;font-size:13px}
+.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.field output{color:var(--muted);font-variant-numeric:tabular-nums}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+
+.rooms{list-style:none;margin:0;padding:0}
+.rooms li{display:grid;grid-template-columns:auto 1fr auto auto;gap:4px 8px;align-items:center;padding:6px 6px;border-radius:6px}
+.rooms .bu{grid-column:2/4;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.rooms .bu select{font-size:12px;padding:2px 4px;max-width:100%;min-width:0;flex:1}
+.rooms .sw{width:10px;height:10px;border-radius:2px;flex:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--sunk);padding:6px 12px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.acc{list-style:none;margin:8px 0 0;padding:0}
+.acc li{display:grid;grid-template-columns:auto auto 1fr auto auto;gap:6px;align-items:center;padding:3px 0;font-size:12.5px}
+.acc li .ln{width:14px;height:4px;border-radius:2px}
+.acc li select{font-size:12px;padding:2px 4px}
+.acc li button.del{border:0;background:none;color:var(--muted);width:24px;height:24px;border-radius:5px}
+.acc li button.del:hover{color:var(--danger);background:var(--sunk)}
+.accsum{font-size:12.5px;margin-top:6px}
+.acc li .opt{grid-column:3/-1;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:12px;color:var(--muted)}
+.acc li .opt label{display:inline-flex;gap:4px;align-items:center}
+.trrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:var(--muted)}
+.trrow input[type=number]{width:70px}
+.seg.wrap{flex-wrap:wrap}
+.accwarn{font-size:12.5px;color:var(--danger);margin-top:4px}
+.step{border-bottom:1px solid var(--line)}
+.stepbar{display:flex;align-items:center;gap:10px;width:100%;border:0;background:var(--sunk);padding:10px 16px;text-align:left;font-weight:650;font-stretch:85%;font-size:15px}
+.stepbar:hover{background:color-mix(in srgb,var(--sunk) 70%,var(--line))}
+.step.open .stepbar{background:var(--surface);cursor:default}
+.snum{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--line);font-size:12px;font-stretch:100%;flex:none}
+.step.open .snum{background:var(--accent);color:var(--accent-ink)}
+.step.done .snum{background:#2E9E5B;color:#fff}
+.ssum{color:var(--muted);font-weight:400;font-stretch:100%;font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sedit{font-size:12px;font-weight:500;color:var(--cand);font-stretch:100%}
+.step.open .sedit{display:none}
+.step:not(.open) .stepbody{display:none}
+.btn.wide{width:100%;margin-top:12px;padding:10px}
+.rbar{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--line);background:var(--sunk);border-radius:8px;padding:8px 10px;margin:0 0 6px;text-align:left;font-size:13px}
+.rbar:hover{border-color:var(--muted)}
+.rbar .rn{font-weight:600;white-space:nowrap}
+.rbar .rs{color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbar .ok{color:#2E9E5B;font-weight:700}
+.rbar .todo{color:var(--muted)}
+.rcard{border:1.5px solid var(--accent);border-radius:10px;padding:12px;margin:0 0 8px;background:var(--surface)}
+.rcard h3{margin:0;font-size:15px;font-stretch:85%}
+.rcard .rmeta{color:var(--muted);font-size:12.5px;margin:2px 0 10px}
+.stack{position:relative;padding-left:22px}
+.stack:before{content:"";position:absolute;left:8px;top:18px;bottom:18px;width:2px;background:linear-gradient(var(--accent),var(--muted))}
+.stack .end{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:2px 0 6px -22px;display:flex;align-items:center;gap:6px}
+.stack .end:before{content:"";width:18px;height:2px;background:currentColor}
+.stack .end.slab{margin:6px 0 2px -22px}
+.layer{display:grid;grid-template-columns:22px 1fr;gap:4px 6px;align-items:center;margin:0 0 8px;position:relative;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--sunk)}
+.layer .lsub{grid-column:2;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.layer .lsub .sp{flex:1}
+.layer .lnum{width:20px;height:20px;border-radius:5px;background:var(--sunk);border:1px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:700;margin-left:-22px;position:relative;left:-1px}
+.layer select{min-width:0;width:100%}
+.layer .bond{font-size:12px;padding:3px 4px;width:auto!important}
+.layer .lbtns{display:flex;gap:2px}
+.layer .lbtns button{border:1px solid var(--line);background:var(--sunk);border-radius:5px;width:24px;height:26px;padding:0;font-size:12px;color:var(--muted)}
+.layer .lbtns button:hover{color:var(--ink);border-color:var(--muted)}
+.layer .lbtns button:disabled{opacity:.35}
+.addlayer{border:1px dashed var(--line);background:none;border-radius:6px;padding:6px 10px;font-size:13px;color:var(--cand);margin:2px 0 4px}
+.addlayer:hover{border-color:var(--cand)}
+.rfoot{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.rfoot .sp{flex:1}
+.height{font-size:12.5px;color:var(--muted);margin-top:6px}
+.copyrow{font-size:12.5px;color:var(--muted);margin:0 0 8px;display:flex;gap:6px;align-items:center}
+.copyrow select{font-size:12px;padding:3px 4px;max-width:60%}
+.twarn{list-style:none;margin:8px 0 0;padding:0;font-size:12.5px;color:var(--danger)}
+.mnotes{list-style:none;margin:6px 0 0;padding:0;font-size:12.5px}
+.mnotes li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
+.mnotes input{margin-top:2px;accent-color:var(--accent)}
+.mnotes .w{display:block;color:var(--muted);font-size:11.5px}
+.viewport.t-split{cursor:crosshair}
+.rooms li.active{background:var(--sunk);box-shadow:inset 3px 0 0 var(--accent)}
+.rooms input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
+.rooms input[type=text]{border:1px solid transparent;background:none;padding:3px 5px;width:100%;min-width:0}
+.rooms input[type=text]:hover,.rooms input[type=text]:focus{border-color:var(--line);background:var(--sunk)}
+.rooms .chk{grid-column:2/4;font-size:12px;color:var(--danger)}
+.rooms .sf{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);white-space:nowrap}
+.rooms .del{border:0;background:none;color:var(--muted);width:26px;height:26px;border-radius:5px}
+.rooms .del:hover{color:var(--danger);background:var(--sunk)}
+.rooms-empty{color:var(--muted);font-size:13px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+.grid2 label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.grid2 label.full{grid-column:1/-1}
+.grid2 input{width:100%;color:var(--ink)}
+
+/* the title-block readout */
+.tblock{margin-top:14px;border:1.5px solid var(--ink);border-radius:4px;font-family:Georgia,"Times New Roman",serif;font-size:14.5px;line-height:1.5;padding:10px 12px;background:var(--sunk);font-variant-numeric:lining-nums}
+.tblock .l{display:block}
+.tblock.empty-t{font-family:inherit;font-size:13px;color:var(--muted);border-style:dashed;border-color:var(--line)}
+.exports{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:18px;max-width:360px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h3{margin:0 0 6px;font-stretch:85%}
+dialog p{margin:0 0 12px;color:var(--muted);font-size:13px}
+dialog input{width:100%}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+
+@media (max-width:900px){
+  body{overflow:auto}
+  .work{grid-template-columns:1fr;grid-template-rows:auto 62vh auto}
+  .tools{flex-direction:row;justify-content:center;border-right:0;border-bottom:1px solid var(--line);padding:6px;flex-wrap:wrap}
+  .tools hr{width:1px;height:28px;border:0;border-left:1px solid var(--line);margin:0 6px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible}
+}
+.results{margin-top:12px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--sunk);font-size:13px}
+.results .ok{font-weight:600;margin:0 0 6px}
+.results .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.results .path{color:var(--muted);word-break:break-all;margin:6px 0 0;font-size:12px}
+.tnotes{margin:8px 0 0;padding-left:18px;font-size:12px;color:var(--muted)}
+.err{color:var(--danger)}
+a.btn{text-decoration:none;display:inline-block}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">Pliteq takeoffs<small>Plan → rooms → takeoff sheet, all on this computer</small></div>
+  <div class="grp">
+    <button class="btn primary" id="openBtn">Open plan</button>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <select id="recentSel" aria-label="Recent plans"><option value="">Recent plans…</option></select>
+  </div>
+  <div class="grp" id="pageGrp" hidden>
+    <label for="pageSel">Page</label><select id="pageSel"></select>
+  </div>
+  <div class="grp">
+    <label for="scaleSel">Drawing scale</label>
+    <select id="scaleSel">
+      <option value="0.0625">1/16″ = 1′-0″</option>
+      <option value="0.09375">3/32″ = 1′-0″</option>
+      <option value="0.125" selected>1/8″ = 1′-0″</option>
+      <option value="0.1875">3/16″ = 1′-0″</option>
+      <option value="0.25">1/4″ = 1′-0″</option>
+      <option value="0.375">3/8″ = 1′-0″</option>
+      <option value="0.5">1/2″ = 1′-0″</option>
+      <option value="0.24">1:50 (metric)</option>
+      <option value="0.12">1:100 (metric)</option>
+      <option value="cal">Calibrated</option>
+    </select>
+    <span class="scale-state" id="scaleState"></span>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<main class="work">
+  <nav class="tools" aria-label="Tools">
+    <button class="tool" data-tool="select" title="Select and include rooms (V)" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg><span class="k">V</span></button>
+    <button class="tool" data-tool="pan" title="Pan (H, or hold Space)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4a1.5 1.5 0 013 0v7M14 11V5.5a1.5 1.5 0 013 0V14c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13.5a1.6 1.6 0 012.6-1.8L8 14"/></svg><span class="k">H</span></button>
+    <hr>
+    <button class="tool" data-tool="click" title="Add a room by clicking inside it (A)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 9v6M9 12h6"/></svg><span class="k">A</span></button>
+    <button class="tool" data-tool="draw" title="Draw a room outline (D)"><svg viewBox="0 0 24 24"><path d="M4 19l3-13 9 2 4 9-8 3z"/><circle cx="4" cy="19" r="1.2"/><circle cx="7" cy="6" r="1.2"/><circle cx="16" cy="8" r="1.2"/></svg><span class="k">D</span></button>
+    <button class="tool" data-tool="access" title="Mark an access point that needs a ramp (T)"><svg viewBox="0 0 24 24"><path d="M3 18h18M5 18l14-8" /><path d="M5 18v-3"/></svg><span class="k">T</span></button>
+    <button class="tool" data-tool="split" title="Split an area in two, e.g. for a different buildup (X)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M14 2l-4 20" stroke-dasharray="3 2"/></svg><span class="k">X</span></button>
+    <button class="tool" data-tool="exclude" title="Cut an irregular shape out of a room: columns, planters, casework (E)"><svg viewBox="0 0 24 24"><path d="M5 7l7-3 7 5-2 9-9 1z"/><path d="M8 8l8 8M16 8l-8 8"/></svg><span class="k">E</span></button>
+    <button class="tool" data-tool="round" title="Add a round column, cut out of the room (O)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M7 7l10 10M17 7L7 17"/></svg><span class="k">O</span></button>
+    <button class="tool" data-tool="column" title="Add a column, cut out of the room (K)"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/><path d="M6 6l12 12M18 6L6 18"/></svg><span class="k">K</span></button>
+    <button class="tool" data-tool="barrier" title="Close an opening such as a doorway (B)"><svg viewBox="0 0 24 24"><path d="M4 4v16M20 4v16M4 12h16"/></svg><span class="k">B</span></button>
+    <hr>
+    <button class="tool" data-tool="measure" title="Measure a distance or area (M)"><svg viewBox="0 0 24 24"><path d="M3 18L18 3l3 3L6 21z"/><path d="M7 14l2 2M10 11l2 2M13 8l2 2M16 5l1 1"/></svg><span class="k">M</span></button>
+    <button class="tool" data-tool="cal" title="Calibrate scale from a known dimension (C)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 8v8M21 8v8M8 10v4M12 9v6M16 10v4"/></svg><span class="k">C</span></button>
+  </nav>
+
+  <section class="viewport t-select" id="vp" aria-label="Plan">
+    <div id="stage"><canvas id="plan" width="10" height="10"></canvas><img id="hires" alt="" hidden></div><svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg><div id="objPop" class="objpop" hidden></div>
+    <div class="empty" id="empty">
+      <div class="drop">
+        <h1>Drop a floor plan here</h1>
+        <p>PDF floor plan. The scale is read from the sheet, rooms are traced and named automatically, and you pick which go into the takeoff.</p>
+        <button class="btn primary" id="openBtn2">Open plan</button>
+      </div>
+    </div>
+    <div class="zoom" id="zoomCtl" hidden>
+      <button id="zIn" title="Zoom in" aria-label="Zoom in">+</button>
+      <button id="zOut" title="Zoom out" aria-label="Zoom out">−</button>
+      <button id="zFit" title="Fit to screen" aria-label="Fit to screen">⤢</button>
+    </div>
+    <div class="hint" id="hint" role="status"></div>
+    <div class="busy" id="busy">Working…</div>
+  </section>
+
+  <aside class="panel">
+    <!-- ============ Step 1: rooms ============ -->
+    <section class="step" id="stepRooms">
+      <button class="stepbar" id="barRooms"><span class="snum">1</span><span class="stitle">Rooms</span><span class="ssum" id="sumRooms"></span><span class="sedit">Edit</span></button>
+      <div class="stepbody" id="bodyRooms">
+        <div class="sec">
+          <div class="exports" style="margin-top:0">
+            <button class="btn primary" id="detectBtn" disabled>Detect rooms</button>
+            <button class="btn" id="aiBtn" disabled title="With a Claude key: click inside the rooms you want and Claude traces their borders (press W instead to read the whole sheet). With Gemini: the AI reads the whole sheet for rooms.">AI first pass</button>
+          </div>
+          <p class="note" id="aiStatus"><button class="link" id="aiSettings">AI settings</button></p>
+          <details>
+            <summary>Detection settings</summary>
+            <p class="note">Rooms that leak through a doorway won’t be found: close the opening with the opening tool (B), or click inside the room with the add tool (A). The settings below only apply to scanned plans.</p>
+            <div class="field"><span>Wall line darkness</span><output id="thrOut"></output><input type="range" id="thr" min="120" max="245" step="5"></div>
+            <div class="field"><span>Ignore lines thinner than</span><output id="thinOut"></output><input type="range" id="thin" min="0" max="4" step="1"></div>
+            <div class="field"><span>Close openings up to</span><output id="gapOut"></output><input type="range" id="gap" min="0" max="40" step="1"></div>
+            <div class="field"><span>Smallest room</span><output id="minOut"></output><input type="range" id="minSf" min="5" max="300" step="5"></div>
+          </details>
+        </div>
+        <div class="sec">
+          <h2>Rooms <span class="n" id="roomCount"></span>
+            <span class="act"><button class="link" id="allBtn">All</button><button class="link" id="noneBtn">None</button></span>
+          </h2>
+          <ul class="rooms" id="roomList"></ul>
+          <p class="rooms-empty" id="roomsEmpty">No rooms yet. Open a plan, then detect rooms.</p>
+          <button class="btn primary wide" id="finalizeBtn" disabled>Finalize Room Selections</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Step 2: buildups, one room at a time ============ -->
+    <section class="step" id="stepBuild" hidden>
+      <button class="stepbar" id="barBuild"><span class="snum">2</span><span class="stitle">Buildups</span><span class="ssum" id="sumBuild"></span><span class="sedit">Edit</span></button>
+      <div class="stepbody" id="bodyBuild">
+        <div class="sec" id="buildRooms"></div>
+      </div>
+    </section>
+
+    <!-- ============ Step 3: sheet ============ -->
+    <section class="step" id="stepSheet" hidden>
+      <button class="stepbar" id="barSheet"><span class="snum">3</span><span class="stitle">Sheet</span><span class="ssum" id="sumSheet"></span><span class="sedit">Edit</span></button>
+      <div class="stepbody" id="bodySheet">
+        <div class="sec" id="trSec">
+          <h2>Transitions</h2>
+          <div class="seg wrap" role="group" aria-label="Slab">
+            <button id="slabRec" aria-pressed="true" title="Slab recessed to the buildup height: no transitions">Recessed</button>
+            <button id="slabPart" aria-pressed="false" title="Slab recessed, but not by the full buildup height: ramps for the rest">Partly recessed</button>
+            <button id="slabNot" aria-pressed="false" title="Buildup sits on top of the slab: ramps at every opening">Not recessed</button>
+          </div>
+          <div class="trrow" id="recessRow"><label>Recess depth <input type="number" id="recessIn" min="0" step="1" placeholder="optional"> mm</label></div>
+          <div id="accBox" hidden>
+            <p class="note">Every opening onto a buildup gets a ramp; at least one needs to be ADA. Ramp size, tiers and wood blocking come from each room's buildup height.</p>
+            <div class="trrow"><button class="btn" id="accFind">Find openings</button><button class="btn" id="accMark">Mark one (T)</button></div>
+            <ul class="acc" id="accList"></ul>
+            <div class="accsum" id="accSum"></div><div class="accwarn" id="accWarn"></div>
+            <details style="margin-top:8px"><summary>Client requests</summary>
+              <div class="trrow"><label>No transitions, requested on <input type="date" id="noTrDate"></label></div>
+              <div class="trrow"><label>No ADA ramps, requested on <input type="date" id="noAdaDate"></label></div>
+            </details>
+          </div>
+        </div>
+        <div class="sec">
+          <h2>Bill of materials</h2>
+          <div class="tblock empty-t" id="tblock">Finish the buildups to see the BOM.</div>
+          <ul class="twarn" id="twarn"></ul>
+          <h2 style="margin-top:14px">Notes on the sheet</h2>
+          <ul class="tnotes" id="tnotes"></ul>
+          <details id="manualBox">
+            <summary>Add notes</summary>
+            <ul class="mnotes" id="mnotes"></ul>
+          </details>
+        </div>
+        <div class="sec">
+          <h2>Title block</h2>
+          <div class="grid2">
+            <label class="full">Project<input type="text" id="project" placeholder="e.g. Alyiah Sloans Lake"></label>
+            <label>Drawing no.<input type="text" id="dwg" placeholder="e.g. ASH-1"></label>
+            <label>Drawn by<input type="text" id="drawnBy" placeholder="initials"></label>
+            <label>Date<input type="date" id="date"></label>
+          </div>
+          <div class="exports">
+            <button class="btn primary" id="buildBtn" disabled>Build takeoff sheet</button>
+            <button class="btn" id="exportPng" disabled>Outline PNG</button>
+            <button class="btn" id="exportJson" disabled>Save rooms.json</button>
+            <button class="btn" id="importBtn" disabled>Load rooms.json</button>
+            <input type="file" id="importFile" accept="application/json,.json" hidden>
+          </div>
+          <div id="results"></div>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+</main>
+
+<dialog id="aiDlg">
+  <h3>AI first pass (Gemini or Claude)</h3>
+  <p>The AI model reads each section of the plan for room names, numbers and likely takeoff rooms. Only the plan images are sent: to Google for Gemini models, to Anthropic for Claude models. Use <b>paid</b> keys: Google’s free tier may use content to improve its products.</p>
+  <p id="aiKeyState"></p>
+  <input type="password" id="aiKey" placeholder="Paste a Claude key (sk-ant-…) or a Gemini key" autocomplete="off">
+  <p class="note">The app tells the two apart. Keys are saved on this computer only (config/anthropic_key.txt for Claude, config/gemini_key.txt for Gemini). Never paste a key into a chat or email.</p>
+  <div class="row" style="margin-top:6px"><button class="btn primary" id="aiSave">Save key</button></div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+  <label style="display:block;font-size:13px;margin-bottom:4px">Model</label>
+  <select id="aiModel" style="width:100%"><option>Loading models for this key…</option></select>
+  <label style="display:block;font-size:13px;margin:10px 0 4px">Border tracing (Claude)</label>
+  <select id="aiTrace" style="width:100%"><option value="claude-opus-5-5">Claude Opus 5.5 · about 4¢ a room · most accurate</option><option value="claude-sonnet-5-5">Claude Sonnet 5.5 · about 1¢ a room · can stop short at open edges</option></select>
+  <p class="note" id="aiModelNote">Cost per sheet is roughly 12 sections × ~1,500 tokens in + ~400 out for Gemini, ~6,000 in + ~1,500 out for Claude (it reads the image at higher resolution).</p>
+  <label style="display:block;font-size:13px;margin:10px 0 4px">Requests per minute</label>
+  <input type="number" id="aiRpm" min="1" max="10000" step="1" style="width:120px">
+  <p class="note">Use your key’s limit: for Gemini, AI Studio (Usage → rate limits), where 15 is the free-tier limit; for Claude, platform.claude.com (Settings → Rate limits): requests per minute for the model you use (4,000 on the Start tier; 300 is plenty).</p>
+  <div class="row"><button class="btn" id="aiCancel">Close</button><button class="btn primary" id="aiSaveSettings">Save model and limit</button></div>
+</dialog>
+
+<dialog id="calDlg">
+  <h3>Set the scale</h3>
+  <p>How long is the line you just drew? Enter feet and inches, like 24′-6″, 24' 6", or 24.5.</p>
+  <input type="text" id="calLen" placeholder="24'-6&quot;" autocomplete="off">
+  <div class="row"><button class="btn" id="calCancel">Cancel</button><button class="btn primary" id="calOk">Set scale</button></div>
+</dialog>
+
+<script>
+"use strict";
+/* ---------- state ---------- */
+const S = {
+  fileName:"", pdf:null, pageNum:1, renderScale:1, isPdf:false,
+  W:0, H:0, ctx:null,
+  pxPerFt:null, calPxPerFt:null,
+  rooms:[], nextId:1, activeId:null,
+  barriers:[],
+  tool:"select",
+  view:{z:1,x:0,y:0},
+  A:null, dirty:true,
+  draft:[], barrierStart:null, calPts:[], hover:null, meas:[], measures:[], colStart:null, circles:[], rcStart:null,
+  lines:{h:[],v:[]}, aiPicks:[], snapMark:null, cut:[], products:[], manualNotes:[], manualOn:new Set(), slab:"recessed", rampInfo:[], access:[], accStart:null,
+  step:"rooms", finalized:false, buIndex:0,
+  params:{thr:200, thin:1, gap:17, minSf:30}
+};
+const $ = id => document.getElementById(id);
+const vp=$("vp"), stage=$("stage"), canvas=$("plan"), ov=$("ov");
+S.ctx = canvas.getContext("2d", {willReadFrequently:true});
+
+async function api(path, body){
+  const opt = body===undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)};
+  const res = await fetch(path, opt);
+  let data; try{ data = await res.json(); }catch(e){ throw new Error(`Server error (${res.status}). Is the app still running in Terminal?`); }
+  if(!res.ok) throw new Error(data.error || `Server error (${res.status})`);
+  return data;
+}
+function updateNameRow(){}
+
+function hint(msg){ $("hint").textContent = msg || ""; }
+let hintTimer=null;
+function flash(msg, ms=4000){ hint(msg); clearTimeout(hintTimer); hintTimer=setTimeout(()=>{ hint(toolHint()); }, ms); }
+function busy(on, msg){ $("busy").textContent = msg || "Working…"; $("busy").classList.toggle("on", !!on); }
+const nextFrame = () => new Promise(r => { let done=false; const f=()=>{ if(!done){ done=true; r(); } }; requestAnimationFrame(()=>requestAnimationFrame(f)); setTimeout(f,60); });
+
+/* ---------- loading ---------- */
+$("openBtn").onclick = $("openBtn2").onclick = () => $("file").click();
+$("file").onchange = e => { const f=e.target.files[0]; if(f) loadFile(f); e.target.value=""; };
+vp.addEventListener("dragover", e => { e.preventDefault(); vp.classList.add("dragover"); });
+vp.addEventListener("dragleave", () => vp.classList.remove("dragover"));
+vp.addEventListener("drop", e => { e.preventDefault(); vp.classList.remove("dragover"); const f=e.dataTransfer.files[0]; if(f) loadFile(f); });
+
+async function loadFile(f){
+  if(!(f.type==="application/pdf" || /\.pdf$/i.test(f.name))){ flash("Open a PDF plan."); return; }
+  busy(true,"Uploading plan…"); await nextFrame();
+  try{
+    const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, {method:"POST", body:await f.arrayBuffer()});
+    const data = await res.json(); if(!res.ok) throw new Error(data.error);
+    await openPlan(data.plan, 1, true);
+    loadRecent();
+  }catch(err){ flash(err.message || String(err), 7000); }
+  busy(false);
+}
+$("pageSel").onchange = async e => { busy(true,"Rendering page…"); await nextFrame();
+  try{ await openPlan(S.plan, +e.target.value, true); }catch(err){ flash(err.message,7000); } busy(false); };
+$("recentSel").onchange = async e => { const v=e.target.value; e.target.value=""; if(!v) return;
+  busy(true,"Opening plan…"); await nextFrame(); try{ await openPlan(v, 1, true); }catch(err){ flash(err.message,7000); } busy(false); };
+async function loadRecent(){
+  try{ const d=await api("/api/plans"); const sel=$("recentSel");
+    sel.innerHTML='<option value="">Recent plans…</option>'+d.plans.map(p=>`<option>${esc(p)}</option>`).join("");
+    sel.hidden=!d.plans.length; }catch(e){}
+}
+async function openPlan(name, page, autoDetect){
+  busy(true,"Rendering plan…"); await nextFrame();
+  const info = await api(`/api/open?plan=${encodeURIComponent(name)}&page=${page}`);
+  const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error("The plan couldn’t be rendered.")); im.src=`/api/render?plan=${encodeURIComponent(name)}&page=${page}`; });
+  S.plan=name; S.fileName=name.replace(/\.pdf$/i,""); S.isPdf=true; S.pageNum=page;
+  const sel=$("pageSel"); sel.innerHTML="";
+  for(let i=1;i<=info.pages;i++){ const o=document.createElement("option"); o.value=i; o.textContent=i; sel.appendChild(o); }
+  sel.value=page; $("pageGrp").hidden = info.pages < 2;
+  setCanvas(img.naturalWidth, img.naturalHeight);
+  S.ctx.fillStyle="#fff"; S.ctx.fillRect(0,0,S.W,S.H); S.ctx.drawImage(img,0,0);
+  S.renderScale = info.render_scale;
+  S.sheetScale = info.scale;
+  $("hires").hidden = true; hiresSeq++;
+  loadLines(name, page); loadCircles(name, page);
+  S.wallCtx = null;   // clean wall drawing for the click-to-add tool, loaded in the background
+  const wim = new Image();
+  wim.onload = () => { if(S.plan!==name || S.pageNum!==page) return;
+    const c=document.createElement("canvas"); c.width=S.W; c.height=S.H;
+    const g=c.getContext("2d",{willReadFrequently:true}); g.drawImage(wim,0,0,S.W,S.H); S.wallCtx=g; S.dirty=true; };
+  wim.src = `/api/walls?plan=${encodeURIComponent(name)}&page=${page}`;
+  if(info.scale) setScaleValue(info.scale.in_per_ft, info.scale.label);
+  if(!$("project").value) $("project").value = "";
+  $("results").innerHTML="";
+  afterLoad();
+  if(!info.scale) flash("Couldn’t read the scale from the sheet. Pick it at the top, or calibrate (C) on a known dimension, then press Detect rooms.", 9000);
+  else if(autoDetect) await detect();
+}
+function setScaleValue(ipf, label){
+  const sel=$("scaleSel");
+  let opt=[...sel.options].find(o=>o.value!=="cal" && Math.abs(parseFloat(o.value)-ipf)<1e-6);
+  if(!opt){ opt=document.createElement("option"); opt.value=String(ipf); opt.textContent=label||`${ipf}″ = 1′-0″`; sel.insertBefore(opt, sel.lastElementChild); }
+  sel.value=opt.value;
+}
+function setCanvas(w,h){
+  S.W=w; S.H=h; canvas.width=w; canvas.height=h;
+  canvas.style.width=w+"px"; canvas.style.height=h+"px";
+}
+function afterLoad(){
+  S.rooms=[]; S.barriers=[]; S.activeId=null; S.A=null; S.dirty=true; S.draft=[]; S.calPts=[]; S.barrierStart=null; S.meas=[]; S.measures=[]; S.access=[]; S.accStart=null; S.step="rooms"; S.finalized=false; S.buIndex=0;
+  const R=S.renderScale;
+  const ipf=parseFloat($("scaleSel").value);
+  S.params.gap = ipf ? Math.round(3.75*72*R*ipf/2) : Math.round(13.5*R);   // 3.75 ft, same as the CLI
+  setParamUI();
+  $("empty").hidden=true; $("zoomCtl").hidden=false; $("detectBtn").disabled=false; $("aiBtn").disabled=false; $("importBtn").disabled=false;
+  updateScale(); fit(); renderAll();
+  hint(toolHint());
+}
+
+/* ---------- scale ---------- */
+$("scaleSel").onchange = () => { if($("scaleSel").value==="cal" && !S.calPxPerFt){ setTool("cal"); } updateScale(); renderAll(); };
+function updateScale(){
+  const v=$("scaleSel").value;
+  if (v==="cal") S.pxPerFt = S.calPxPerFt;
+  else S.pxPerFt = S.isPdf ? 72*S.renderScale*parseFloat(v) : S.calPxPerFt;
+  const fromSheet = S.sheetScale && v!=="cal" && Math.abs(parseFloat(v)-S.sheetScale.in_per_ft)<1e-6;
+  $("scaleState").textContent = S.W ? (S.pxPerFt ? (fromSheet ? (S.sheetScale.source==="dimensions" ? "estimated from dimensions, check it" : "read from sheet") : (v==="cal" ? "calibrated" : "set by hand")) : "not set — calibrate") : "";
+  updateParamOutputs();
+}
+function sf(px2){ return S.pxPerFt ? px2/(S.pxPerFt*S.pxPerFt) : null; }
+
+/* ---------- detection params ---------- */
+["thr","thin","gap","minSf"].forEach(k => $(k).addEventListener("input", e => { S.params[k]=+e.target.value; S.dirty=true; updateParamOutputs(); }));
+function setParamUI(){ for(const k of ["thr","thin","gap","minSf"]) $(k).value=S.params[k]; updateParamOutputs(); }
+function updateParamOutputs(){
+  const p=S.params;
+  $("thrOut").textContent = p.thr;
+  $("thinOut").textContent = p.thin ? `${p.thin*2+1} px` : "off";
+  $("gapOut").textContent = S.pxPerFt ? `≈ ${(2*p.gap/S.pxPerFt).toFixed(1)} ft` : `${2*p.gap} px`;
+  $("minOut").textContent = `${p.minSf} SF`;
+}
+
+/* ---------- morphology ---------- */
+function dilate(src,W,H,r){
+  if(r<=0) return src.slice();
+  const tmp=new Uint8Array(W*H), out=new Uint8Array(W*H), ps=new Int32Array(Math.max(W,H)+1);
+  for(let y=0;y<H;y++){ const o=y*W; ps[0]=0;
+    for(let x=0;x<W;x++) ps[x+1]=ps[x]+src[o+x];
+    for(let x=0;x<W;x++){ const a=x-r<0?0:x-r, b=x+r+1>W?W:x+r+1; tmp[o+x]=ps[b]-ps[a]>0?1:0; } }
+  for(let x=0;x<W;x++){ ps[0]=0;
+    for(let y=0;y<H;y++) ps[y+1]=ps[y]+tmp[y*W+x];
+    for(let y=0;y<H;y++){ const a=y-r<0?0:y-r, b=y+r+1>H?H:y+r+1; out[y*W+x]=ps[b]-ps[a]>0?1:0; } }
+  return out;
+}
+function invert(m){ const o=new Uint8Array(m.length); for(let i=0;i<m.length;i++) o[i]=m[i]?0:1; return o; }
+function erode(src,W,H,r){ return r<=0 ? src.slice() : invert(dilate(invert(src),W,H,r)); }
+
+function stampLine(mask,W,H,a,b,rad){
+  const len=Math.hypot(b[0]-a[0],b[1]-a[1]), n=Math.max(1,Math.ceil(len));
+  for(let i=0;i<=n;i++){ const x=Math.round(a[0]+(b[0]-a[0])*i/n), y=Math.round(a[1]+(b[1]-a[1])*i/n);
+    for(let dy=-rad;dy<=rad;dy++) for(let dx=-rad;dx<=rad;dx++){ const xx=x+dx, yy=y+dy; if(xx>=0&&yy>=0&&xx<W&&yy<H) mask[yy*W+xx]=1; } }
+}
+
+/* ---------- analysis ---------- */
+async function analyze(){
+  const {W,H}=S, N=W*H, p=S.params;
+  busy(true,"Reading wall lines…"); await nextFrame();
+  const vec=!!S.wallCtx;
+  const d=(S.wallCtx||S.ctx).getImageData(0,0,W,H).data;
+  const dark=new Uint8Array(N);
+  for(let i=0,j=0;i<N;i++,j+=4){
+    const r=d[j],g=d[j+1],b=d[j+2];
+    const mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b);
+    dark[i] = (0.299*r+0.587*g+0.114*b) < p.thr && (mx-mn) < 70 ? 1 : 0; // ignore coloured markups
+  }
+  let walls = (!vec && p.thin>0) ? dilate(erode(dark,W,H,p.thin),W,H,p.thin) : dark;
+  for(const bar of S.barriers) stampLine(walls,W,H,bar[0],bar[1],2);
+  busy(true,"Closing openings…"); await nextFrame();
+  const closed = dilate(walls,W,H,p.gap);
+  busy(true,"Finding enclosed spaces…"); await nextFrame();
+  const lab=new Int32Array(N), stack=new Int32Array(N);
+  const comps=[null]; let id=0;
+  for(let s=0;s<N;s++){
+    if(closed[s]||lab[s]) continue;
+    id++; let sp=0; stack[sp++]=s; lab[s]=id;
+    let area=0,minx=W,miny=H,maxx=0,maxy=0,border=false;
+    while(sp){
+      const q=stack[--sp]; area++;
+      const x=q%W, y=(q-x)/W;
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      if(x===0||y===0||x===W-1||y===H-1) border=true;
+      if(x>0   && !closed[q-1] && !lab[q-1]){lab[q-1]=id;stack[sp++]=q-1;}
+      if(x<W-1 && !closed[q+1] && !lab[q+1]){lab[q+1]=id;stack[sp++]=q+1;}
+      if(y>0   && !closed[q-W] && !lab[q-W]){lab[q-W]=id;stack[sp++]=q-W;}
+      if(y<H-1 && !closed[q+W] && !lab[q+W]){lab[q+W]=id;stack[sp++]=q+W;}
+    }
+    comps.push({id,area,minx,miny,maxx,maxy,border});
+  }
+  S.A={walls,lab,comps,W,H}; S.dirty=false;
+  busy(false);
+}
+
+function compToPolygon(c){
+  const {walls,lab,W,H}=S.A, g=S.params.gap, pad=g+3;
+  const x0=Math.max(0,c.minx-pad), y0=Math.max(0,c.miny-pad), x1=Math.min(W-1,c.maxx+pad), y1=Math.min(H-1,c.maxy+pad);
+  const w=x1-x0+1, h=y1-y0+1;
+  let m=new Uint8Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(lab[(y+y0)*W+x+x0]===c.id) m[y*w+x]=1;
+  m=dilate(m,w,h,g);                                    // grow back to the wall faces
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(walls[(y+y0)*W+x+x0]) m[y*w+x]=0;
+  m=fillHoles(m,w,h);
+  m=keepLargest(m,w,h);
+  const pts=traceContour(m,w,h);
+  if(pts.length<3) return null;
+  const simp=rdpClosed(pts, Math.max(1.5, 1.6*S.renderScale));
+  return simp.map(([x,y])=>[x+x0+0.5,y+y0+0.5]);
+}
+function fillHoles(m,w,h){
+  const out=m.slice(), seen=new Uint8Array(w*h), st=[];
+  const push=i=>{ if(!m[i]&&!seen[i]){seen[i]=1;st.push(i);} };
+  for(let x=0;x<w;x++){push(x);push((h-1)*w+x);} for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}
+  while(st.length){ const q=st.pop(), x=q%w, y=(q-x)/w;
+    if(x>0)push(q-1); if(x<w-1)push(q+1); if(y>0)push(q-w); if(y<h-1)push(q+w); }
+  for(let i=0;i<w*h;i++) if(!m[i]&&!seen[i]) out[i]=1;
+  return out;
+}
+function keepLargest(m,w,h){
+  const lab=new Int32Array(w*h); let best=0,bestA=0,id=0; const st=[];
+  for(let s=0;s<w*h;s++){ if(!m[s]||lab[s]) continue; id++; let a=0; st.push(s); lab[s]=id;
+    while(st.length){ const q=st.pop(); a++; const x=q%w, y=(q-x)/w;
+      const nb=[x>0?q-1:-1,x<w-1?q+1:-1,y>0?q-w:-1,y<h-1?q+w:-1];
+      for(const n of nb) if(n>=0&&m[n]&&!lab[n]){lab[n]=id;st.push(n);} }
+    if(a>bestA){bestA=a;best=id;} }
+  const o=new Uint8Array(w*h); for(let i=0;i<w*h;i++) o[i]=lab[i]===best?1:0; return o;
+}
+const DX=[1,1,0,-1,-1,-1,0,1], DY=[0,1,1,1,0,-1,-1,-1];
+function dirOf(dx,dy){ for(let i=0;i<8;i++) if(DX[i]===dx&&DY[i]===dy) return i; return 0; }
+function traceContour(m,w,h){
+  let s=-1; for(let i=0;i<w*h;i++) if(m[i]){s=i;break;} if(s<0) return [];
+  const at=(x,y)=>x>=0&&y>=0&&x<w&&y<h&&m[y*w+x]===1;
+  const sx=s%w, sy=(s-sx)/w; let cx=sx, cy=sy, bx=sx-1, by=sy;
+  const b0x=bx, b0y=by; const pts=[[cx,cy]]; const limit=w*h*2;
+  for(let it=0; it<limit; it++){
+    const d0=dirOf(bx-cx,by-cy); let moved=false;
+    for(let k=1;k<=8;k++){
+      const d=(d0+k)%8, nx=cx+DX[d], ny=cy+DY[d];
+      if(at(nx,ny)){ const pd=(d0+k-1)%8; bx=cx+DX[pd]; by=cy+DY[pd]; cx=nx; cy=ny; moved=true; break; }
+    }
+    if(!moved) break;
+    if(cx===sx&&cy===sy&&bx===b0x&&by===b0y) break;
+    if(cx===sx&&cy===sy && pts.length>8 && it>4*(w+h)*4) break;
+    pts.push([cx,cy]);
+  }
+  return pts;
+}
+function rdp(pts,eps){
+  if(pts.length<3) return pts.slice();
+  const keep=new Uint8Array(pts.length); keep[0]=keep[pts.length-1]=1;
+  const st=[[0,pts.length-1]];
+  while(st.length){ const [a,b]=st.pop(); let md=0,mi=-1;
+    const [ax,ay]=pts[a],[bx,by]=pts[b], dx=bx-ax, dy=by-ay, L=Math.hypot(dx,dy)||1;
+    for(let i=a+1;i<b;i++){ const d=Math.abs(dy*pts[i][0]-dx*pts[i][1]+bx*ay-by*ax)/L; if(d>md){md=d;mi=i;} }
+    if(md>eps&&mi>0){ keep[mi]=1; st.push([a,mi],[mi,b]); } }
+  return pts.filter((_,i)=>keep[i]);
+}
+function rdpClosed(pts,eps){
+  // split at the point farthest from the start so both halves are well conditioned
+  let far=0,fd=0; for(let i=1;i<pts.length;i++){ const d=Math.hypot(pts[i][0]-pts[0][0],pts[i][1]-pts[0][1]); if(d>fd){fd=d;far=i;} }
+  const a=rdp(pts.slice(0,far+1),eps), b=rdp(pts.slice(far).concat([pts[0]]),eps);
+  return a.concat(b.slice(1,-1));
+}
+
+/* ---------- geometry helpers ---------- */
+function polyArea(p){ let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]+p[i][0])*(p[j][1]-p[i][1]); return Math.abs(a/2); }
+function inPoly(x,y,p){ let c=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if(((yi>y)!==(yj>y)) && x<(xj-xi)*(y-yi)/(yj-yi)+xi) c=!c; } return c; }
+function labelPoint(p){
+  let a=0,cx=0,cy=0; for(let i=0,j=p.length-1;i<p.length;j=i++){ const f=p[j][0]*p[i][1]-p[i][0]*p[j][1]; a+=f; cx+=(p[j][0]+p[i][0])*f; cy+=(p[j][1]+p[i][1])*f; }
+  if(a){ cx/=3*a; cy/=3*a; } if(a && inPoly(cx,cy,p)) return [cx,cy];
+  const ys=p.map(q=>q[1]); const y=(Math.min(...ys)+Math.max(...ys))/2; const xs=[];
+  for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if((yi>y)!==(yj>y)) xs.push(xi+(y-yi)*(xj-xi)/(yj-yi)); }
+  xs.sort((m,n)=>m-n); let best=[p[0][0],p[0][1]],bw=-1;
+  for(let i=0;i+1<xs.length;i+=2) if(xs[i+1]-xs[i]>bw){bw=xs[i+1]-xs[i]; best=[(xs[i]+xs[i+1])/2,y];}
+  return best;
+}
+function roomArea(r){ return polyArea(r.pts) - (r.holes||[]).reduce((s,h)=>s+polyArea(h),0); }
+function inRoom(x,y,r){ return inPoly(x,y,r.pts) && !(r.holes||[]).some(h=>inPoly(x,y,h)); }
+function lowerBound(arr,v){ let lo=0,hi=arr.length; while(lo<hi){ const m=(lo+hi)>>1; if(arr[m][0]<v) lo=m+1; else hi=m; } return lo; }
+function nearestLine(arr,c,along,tol){
+  // arr: [[coord, lo, hi], ...] sorted by coord. Nearest line within tol of c whose extent covers `along`.
+  let best=null;
+  for(let i=lowerBound(arr,c-tol); i<arr.length && arr[i][0]<=c+tol; i++){
+    const L=arr[i]; if(along<L[1]-tol || along>L[2]+tol) continue;
+    const d=Math.abs(L[0]-c); if(!best || d<best[0]) best=[d,L[0]];
+  }
+  return best ? best[1] : null;
+}
+function snapPt(p,e){
+  // Snap onto the drawing's own horizontal/vertical lines (Alt turns it off).
+  S.snapMark=null;
+  if((e && e.altKey) || !S.lines.h.length) return p;
+  const tol=7/S.view.z;
+  const x=nearestLine(S.lines.v,p[0],p[1],tol), y=nearestLine(S.lines.h,p[1],p[0],tol);
+  if(x==null && y==null) return p;
+  const q=[x==null?p[0]:x, y==null?p[1]:y]; S.snapMark=q; return q;
+}
+async function loadCircles(name,page){
+  S.circles=[];
+  try{ const d=await api(`/api/circles?plan=${encodeURIComponent(name)}&page=${page}`); if(S.plan!==name||S.pageNum!==page) return;
+    const R=S.renderScale; S.circles=d.circles.map(c=>[c[0]*R,c[1]*R,c[2]*R]); }catch(e){}
+}
+// a drawn circle under the point that's the size of a column (6" to 8' across)
+function circleAt(p){
+  const ok=c=>!S.pxPerFt || (2*c[2]/S.pxPerFt>=0.5 && 2*c[2]/S.pxPerFt<=8);
+  return S.circles.filter(c=>ok(c) && Math.hypot(p[0]-c[0],p[1]-c[1])<=c[2]*1.05).sort((a,b)=>a[2]-b[2])[0]||null;
+}
+function circlePoly(cx,cy,r,n=32){ const o=[]; for(let i=0;i<n;i++){ const a=2*Math.PI*i/n; o.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]); } return o; }
+function addRoundColumn(cx,cy,r){
+  const host=S.rooms.filter(q=>inRoom(cx,cy,q)).sort((m,n)=>polyArea(m.pts)-polyArea(n.pts))[0];
+  if(!host){ flash("A column has to be inside a room."); renderOverlay(); return; }
+  const poly=circlePoly(cx,cy,r); host.holes=(host.holes||[]).concat([poly]); S.activeId=host.id; renderAll();
+  const dia=S.pxPerFt?fmtLen(2*r/S.pxPerFt):"";
+  flash(`Round column added${dia?" ("+dia+" across, "+Math.round(sf(polyArea(poly))*10)/10+" SF)":""}, taken out of ${host.name}. Alt-click it with the select tool to remove it.`,6000);
+}
+async function loadLines(name,page){
+  S.lines={h:[],v:[]};
+  try{ const d=await api(`/api/lines?plan=${encodeURIComponent(name)}&page=${page}`); if(S.plan!==name||S.pageNum!==page) return;
+    const R=S.renderScale; const conv=a=>a.map(t=>[t[0]*R,t[1]*R,t[2]*R]);
+    S.lines={h:conv(d.h), v:conv(d.v)}; }catch(e){}
+}
+function bbox(p){ let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity; for(const [x,y] of p){ if(x<a)a=x; if(y<b)b=y; if(x>c)c=x; if(y>d)d=y; } return [a,b,c,d]; }
+
+/* ---------- rooms ---------- */
+const PALETTE_NAMES=n=>`Room ${n}`;
+function addRoom(pts,source,comp){
+  const r={id:S.nextId++, name:PALETTE_NAMES(S.nextId-1), pts, holes:[], include:false, source, comp:comp||null};
+  S.rooms.push(r); return r;
+}
+$("detectBtn").onclick = () => detect(false);
+$("aiBtn").onclick = () => {
+  if(!S.W) return;
+  if(!S.pxPerFt){ flash("Set the drawing scale first (top bar), or calibrate (C)."); return; }
+  if(aiInfo && aiInfo.claude && aiInfo.claude.configured){ setTool("aipick"); return; }
+  detect(true);
+};
+async function traceRooms(){
+  const picks=S.aiPicks.slice();
+  if(!picks.length){ flash("Click inside the rooms you want traced first, then press Enter."); return; }
+  const R=S.renderScale, p=S.params;
+  busy(true, `Claude is tracing ${picks.length} room${picks.length>1?"s":""}…`); await nextFrame();
+  try{
+    const d=await api("/api/ai/trace",{plan:S.plan, page:S.pageNum, in_per_ft:inPerFt(),
+      threshold:p.thr, thin:p.thin, gap_ft: 2*p.gap/S.pxPerFt, min_sf:p.minSf,
+      barriers_pt: S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]]),
+      points: picks.map(([x,y])=>[x/R,y/R])});
+    busy(false);
+    let ok=0;
+    for(const q of d.rooms){ if(!q) continue; ok++;
+      const r=addRoom(q.outline_pt.map(([x,y])=>[x*R,y*R]),"ai");
+      if(q.name) r.name=q.name; r.number=q.number||null; r.include=true; r.openings=q.openings_pt||null;
+      r.holes=(q.holes_pt||[]).map(h=>h.map(([x,y])=>[x*R,y*R]));
+    }
+    S.aiPicks=[]; setTool("select"); renderAll();
+    const miss=picks.length-ok;
+    flash(`Claude traced ${ok} room${ok===1?"":"s"} in ${Math.round(d.seconds||0)} s (${d.cost_usd==null?"price unknown":"about $"+d.cost_usd.toFixed(2)}). They're included; check the borders.`+(miss?` ${miss} couldn't be traced: draw ${miss>1?"those":"that one"} with D.`:""), 10000);
+  }catch(err){ busy(false); flash(err.message, 10000); }
+}
+let aiInfo=null;
+async function loadAiStatus(){
+  try{ aiInfo=await api("/api/ai/status"); }catch(e){ aiInfo=null; }
+  $("aiStatus").innerHTML = (aiInfo&&aiInfo.configured ? `AI model: ${esc(aiInfo.model)} · ${aiInfo.rpm}/min · key ${esc(aiInfo.hint)} · ` : `AI first pass needs ${aiInfo&&aiInfo.model?(aiInfo.provider==="claude"?"a Claude":"a Gemini"):"an"} API key · `)+`<button class="link" id="aiSettings">AI settings</button>`;
+  $("aiSettings").onclick=openAiDlg;
+}
+function openAiDlg(){
+  const ks=p=>{ const k=aiInfo&&aiInfo[p]; return k&&k.configured ? `set (${k.hint}${k.source==="environment"?", from the environment":""})` : "not set"; };
+  $("aiKeyState").textContent = aiInfo ? `Claude key: ${ks("claude")}. Gemini key: ${ks("gemini")}. Paste a key to add or replace it.` : "No key set yet.";
+  $("aiKey").value=""; $("aiRpm").value = aiInfo&&aiInfo.rpm || 15; $("aiTrace").value = aiInfo&&aiInfo.trace_model || "claude-opus-5-5"; $("aiDlg").showModal();
+  loadAiModels();
+}
+function sheetCost(pr,id){ if(!pr) return "price unknown"; const cl=/^claude/.test(id||""), c=12*((cl?6000:1500)*pr[0]+(cl?1500:400)*pr[1])/1e6; return c<0.01?"under 1¢ a sheet":`about ${Math.round(c*100)}¢ a sheet`; }
+async function loadAiModels(){
+  const sel=$("aiModel");
+  if(!(aiInfo&&((aiInfo.claude||{}).configured||(aiInfo.gemini||{}).configured))){ sel.innerHTML='<option>Save a key first</option>'; sel.disabled=true; return; }
+  sel.disabled=true; sel.innerHTML='<option>Loading models for this key…</option>';
+  try{
+    const d=await api("/api/ai/models");
+    const cur=d.current.model;
+    if(!d.models.some(m=>m.id===cur)) d.models.unshift({id:cur,name:cur+" (not listed for this key)",price:null});
+    sel.innerHTML=d.models.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} · ${m.price?`$${m.price[0]} / $${m.price[1]} per M tokens · ${sheetCost(m.price,m.id)}`:"price unknown"}</option>`).join("");
+    sel.value=cur; sel.disabled=false;
+  }catch(e){ sel.innerHTML=`<option>${esc(e.message)}</option>`; }
+}
+$("aiSaveSettings").onclick=async()=>{
+  try{ aiInfo=await api("/api/ai/settings",{model:$("aiModel").disabled?null:$("aiModel").value, rpm:+$("aiRpm").value, trace_model:$("aiTrace").value});
+    $("aiDlg").close(); loadAiStatus(); flash(`AI model set to ${aiInfo.model}, ${aiInfo.rpm} requests a minute.`); }
+  catch(e){ $("aiModelNote").textContent=e.message; }
+};
+$("aiCancel").onclick=()=>$("aiDlg").close();
+$("aiSave").onclick=async()=>{
+  $("aiKeyState").textContent=/^\s*["'`]?sk-ant-/.test($("aiKey").value)?"Checking the key with Anthropic…":"Checking the key with Google…";
+  try{ aiInfo=await api("/api/ai/key",{key:$("aiKey").value}); $("aiKey").value=""; $("aiDlg").close(); loadAiStatus();
+    flash((aiInfo.saved==="claude"?"Claude key saved. ":"Gemini key saved. ")+(aiInfo.message||"")+(aiInfo.saved&&aiInfo.saved!==aiInfo.provider?` To use it, pick a ${aiInfo.saved==="claude"?"Claude":"Gemini"} model in AI settings.`:""), 9000); }
+  catch(e){ $("aiKeyState").textContent=e.message; }
+};
+loadAiStatus();
+function inPerFt(){ return S.pxPerFt ? S.pxPerFt/S.renderScale/72 : null; }
+async function detect(useAi){
+  if(!S.W) return;
+  if(!S.pxPerFt){ flash("Set the drawing scale first (top bar), or calibrate (C)."); return; }
+  if(useAi && !(aiInfo&&aiInfo.configured)){ openAiDlg(); return; }
+  const R=S.renderScale, p=S.params;
+  busy(true, useAi ? "AI is reading the plan… (larger models can take a minute or two)" : "Finding rooms…"); await nextFrame();
+  try{
+    const d = await api(useAi ? "/api/ai/detect" : "/api/detect", {plan:S.plan, page:S.pageNum, in_per_ft:inPerFt(),
+      threshold:p.thr, thin:p.thin, gap_ft: 2*p.gap/S.pxPerFt, min_sf:p.minSf,
+      barriers_pt: S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]])});
+    const wasIncluded=new Set(S.rooms.filter(r=>r.source==="auto"&&r.include).map(r=>r.name));
+    const wasLayers=Object.fromEntries(S.rooms.filter(r=>r.source==="auto"&&r.layers&&r.layers.length).map(r=>[r.name,r]));
+    S.rooms=S.rooms.filter(r=>r.source!=="auto");
+    for(const q of d.rooms){
+      const r=addRoom(q.outline_pt.map(([x,y])=>[x*R,y*R]),"auto");
+      r.name=q.name; r.number=q.number; r.include=wasIncluded.has(q.name) || (!!useAi && !!q.ai_candidate); if(wasLayers[q.name]){ r.layers=wasLayers[q.name].layers; r.finishByPliteq=wasLayers[q.name].finishByPliteq; }
+      r.check=q.check||null; r.finishTag=q.finish_tag||null; r.openings=q.openings_pt||null;
+      r.holes=(q.holes_pt||[]).map(h=>h.map(([x,y])=>[x*R,y*R]));
+    }
+    busy(false); renderAll();
+    const named=d.rooms.filter(r=>r.number).length;
+    if(useAi){ const a=d.ai, inc=d.rooms.filter(r=>r.ai_candidate).length, chk=d.rooms.filter(r=>r.check).length;
+      flash(`AI (${a.model}) read ${d.ai_rooms} rooms in ${a.sent} sections, ${a.requests} request${a.requests===1?"":"s"}${a.requests>a.sent?" incl. retries":""} in ${Math.round(a.seconds||0)} s (${a.cost_usd==null?"price unknown":"about $"+a.cost_usd.toFixed(3)}). ${inc} look like takeoff rooms and are ticked.`+(d.traced&&d.traced.tried?(d.traced.rooms?` Claude traced ${d.traced.rooms===d.traced.tried?"":d.traced.rooms+" of "}${d.traced.tried} of their borders onto the walls (${Math.round(d.traced.seconds||0)} s, ${d.traced.cost_usd==null?"price unknown":"about $"+d.traced.cost_usd.toFixed(2)}).`:` Claude couldn't trace the ticked rooms' borders, so they're line-traced.`):"")+(chk?` ${chk} outline${chk>1?"s":""} came from the AI's rough box: check ${chk>1?"them":"it"} (marked in the list).`:"")+" Check names and outlines before building.", 14000);
+      return; }
+    flash(d.rooms.length ? `Found ${d.rooms.length} rooms (${named} named from the plan). Click rooms or tick them in the list to include them.` : "No enclosed rooms found. Try closing doorways with the opening tool (B) or raising “Close openings up to”.", 8000);
+  }catch(err){ busy(false); flash(err.message, 8000); }
+}
+
+async function clickDetect(x,y){
+  // already a room here: just include it
+  const here=S.rooms.filter(r=>inRoom(x,y,r)).sort((a,b)=>polyArea(a.pts)-polyArea(b.pts))[0];
+  if(here){ here.include=true; S.activeId=here.id; renderAll(); return; }
+  // the server traces the room with the page's own labels and wall rules (first click on a page
+  // takes a few seconds, later ones are instant)
+  if(S.pxPerFt){
+    const R=S.renderScale, p=S.params;
+    busy(true,"Finding the room…"); await nextFrame();
+    try{
+      const d=await api("/api/room_at",{plan:S.plan, page:S.pageNum, in_per_ft:inPerFt(), pt:[x/R,y/R],
+        threshold:p.thr, thin:p.thin, gap_ft:2*p.gap/S.pxPerFt, min_sf:p.minSf,
+        barriers_pt:S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]])});
+      busy(false);
+      if(d.room){
+        const q=d.room, r=addRoom(q.outline_pt.map(([a,b])=>[a*R,b*R]),"click");
+        if(q.name) r.name=q.name; r.number=q.number||null; r.check=q.check||null; r.finishTag=q.finish_tag||null;
+        r.holes=(q.holes_pt||[]).map(h=>h.map(([a,b])=>[a*R,b*R]));
+        r.include=true; S.activeId=r.id; renderAll();
+        flash(`${q.name||"Room"}: ${Math.round(q.area_sf)} SF. If it spills through an opening, close it with the opening tool (B) and click again.`, 6000);
+        return;
+      }
+    }catch(err){ busy(false); }
+  }
+  if(S.dirty) await analyze();
+  const {lab,comps,W,H}=S.A; const xi=Math.floor(x), yi=Math.floor(y);
+  if(xi<0||yi<0||xi>=W||yi>=H) return;
+  let id=lab[yi*W+xi];
+  if(!id){ // clicked on a wall/text: look nearby
+    outer: for(let r=1;r<=6;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){ const xx=xi+dx,yy=yi+dy; if(xx>=0&&yy>=0&&xx<W&&yy<H&&lab[yy*W+xx]){id=lab[yy*W+xx];break outer;} }
+  }
+  if(!id){ flash("That spot is on a wall or a dense hatch. Click in open floor area, or draw the room (D)."); return; }
+  const c=comps[id];
+  if(c.border || c.area>W*H*0.25){ flash("This space leaks to the outside of the drawing. Close the doorway with the opening tool (B), then click again."); return; }
+  const existing=S.rooms.find(r=>r.comp===id && r.source!=="drawn");
+  if(existing){ existing.include=true; S.activeId=existing.id; renderAll(); return; }
+  busy(true,"Tracing outline…"); await nextFrame();
+  const pts=compToPolygon(c); busy(false);
+  if(!pts){ flash("Couldn’t trace that space."); return; }
+  const r=addRoom(pts,"click",id); r.include=true; S.activeId=r.id; renderAll();
+}
+
+/* ---------- view transform ---------- */
+function applyView(){ const v=S.view; stage.style.transform=`translate(${v.x}px,${v.y}px) scale(${v.z})`; renderOverlay(); scheduleHires(); }
+let hiresTimer=null, hiresSeq=0;
+function scheduleHires(){ clearTimeout(hiresTimer); hiresTimer=setTimeout(loadHires,220); }
+function loadHires(){
+  const img=$("hires");
+  if(!S.plan || !S.W) { img.hidden=true; return; }
+  const v=S.view, dpr=window.devicePixelRatio||1, r=vp.getBoundingClientRect();
+  if(v.z*dpr<=1.05 || r.width<10){ img.hidden=true; return; }       // the base image is sharp enough
+  let x0=-v.x/v.z, y0=-v.y/v.z, x1=x0+r.width/v.z, y1=y0+r.height/v.z;
+  const pw=(x1-x0)*0.15, ph=(y1-y0)*0.15;
+  x0=Math.max(0,x0-pw); y0=Math.max(0,y0-ph); x1=Math.min(S.W,x1+pw); y1=Math.min(S.H,y1+ph);
+  if(x1<=x0||y1<=y0) return;
+  const R=S.renderScale; let k=Math.min(12, R*v.z*dpr);                 // px per PDF point
+  const ptW=(x1-x0)/R, ptH=(y1-y0)/R; if(ptW*ptH*k*k>30e6) k=Math.sqrt(30e6/(ptW*ptH));
+  const seq=++hiresSeq, url=`/api/render?plan=${encodeURIComponent(S.plan)}&page=${S.pageNum}&clip=${(x0/R).toFixed(2)},${(y0/R).toFixed(2)},${(x1/R).toFixed(2)},${(y1/R).toFixed(2)}&scale=${k.toFixed(3)}`;
+  const im=new Image();
+  im.onload=()=>{ if(seq!==hiresSeq) return; img.src=im.src;
+    Object.assign(img.style,{left:x0+"px",top:y0+"px",width:(x1-x0)+"px",height:(y1-y0)+"px"}); img.hidden=false; };
+  im.src=url;
+}
+function fit(){
+  if(!S.W) return; const r=vp.getBoundingClientRect();
+  const z=Math.max(0.02, Math.min((r.width-40)/S.W,(r.height-40)/S.H));
+  S.view={z, x:(r.width-S.W*z)/2, y:(r.height-S.H*z)/2}; applyView();
+}
+function zoomAt(f,cx,cy){
+  const v=S.view, nz=Math.min(8,Math.max(0.05,v.z*f)), k=nz/v.z;
+  v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.z=nz; applyView();
+}
+$("zIn").onclick=()=>{const r=vp.getBoundingClientRect(); zoomAt(1.4,r.width/2,r.height/2);};
+$("zOut").onclick=()=>{const r=vp.getBoundingClientRect(); zoomAt(1/1.4,r.width/2,r.height/2);};
+$("zFit").onclick=fit;
+window.addEventListener("resize",()=>{ if(S.W) applyView(); });
+vp.addEventListener("wheel",e=>{ if(!S.W) return; e.preventDefault(); const r=vp.getBoundingClientRect();
+  const f=Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0015)); zoomAt(f,e.clientX-r.left,e.clientY-r.top); },{passive:false});
+function toImg(e){ const r=vp.getBoundingClientRect(), v=S.view; return [(e.clientX-r.left-v.x)/v.z,(e.clientY-r.top-v.y)/v.z]; }
+
+/* ---------- tools ---------- */
+const TOOL_HINTS={
+  select:"Click a transition, measurement or closed doorway to select, resize or delete it. Click a room to include or exclude it. Drag its corners to adjust (they snap to the drawing; Alt = free, Shift = square). Double-click an edge to add a corner, Alt-click a corner or column to delete it. Shift-click a touching room to join it into the selected one.",
+  pan:"Drag to move around. Scroll to zoom.",
+  click:"Click inside a room to trace it from the wall lines.",
+  aipick:"Click inside each room you want Claude to trace (one click per room). Enter traces them; Backspace removes the last click; W reads the whole sheet instead; Esc cancels.",
+  draw:"Click the room's corners: between two corners on the same wall the edge follows the wall face for you (pilasters, jogs, recesses), so you only click where the outline turns away from a wall, e.g. at each door jamb. Click the first point, double-click, or press Enter to finish. Shift = straight square edge, Alt = free point, no tracing. Cmd/Ctrl-Z undoes the last corner. Esc cancels.",
+  barrier:"Click two points across a doorway or opening to close it, then detect again. After the first click you can type a length (e.g. 3'6) and press Enter. Click a closed opening to select it; Delete removes it.",
+  cal:"Click both ends of a dimension you know, then enter its length.",
+  access:"Double-click on a room's edge for a standard 42\" ADA opening there, or click both ends of an opening for a custom width. After the first click you can type a length instead (42\" or 3'6, plain numbers are feet) and press Enter. Click a transition to select it: drag its ends, type a new length, or press Delete. Cmd/Ctrl-Z undoes.",
+  split:"Click across the area you want to split: start at one wall, click again at the opposite wall (add clicks in between for bends), then double-click or press Enter. Points snap to the drawing; Shift keeps lines square.",
+  exclude:"Click the corners of an area to leave out of the room (an irregular column, planter or casework). Double-click, Enter or click the first corner to finish. Points snap to the drawing; Shift keeps edges square; Cmd/Ctrl-Z undoes the last point.",
+  round:"Click inside a round column drawn on the plan to cut it out. If it isn't drawn as a circle, click its centre, then its edge.",
+  column:"Click two opposite corners of a column. Its area is taken out of the room. Corners snap to the drawing's lines (hold Alt for free placement).",
+  measure:"Click points to measure. After a click you can type a length (12'6, 42\", 12.5) and press Enter to place the next point that far toward the cursor. Double-click or Enter to finish; click the first point to close a shape. Click a measurement to select it, drag its points, or press Delete. Esc twice clears all."
+};
+function toolHint(){ return S.W ? TOOL_HINTS[S.tool] : ""; }
+function setTool(t){
+  if(t!=="aipick") S.aiPicks=[];
+  S.tool=t; S.sel=null; S.typed=""; S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null;
+  document.querySelectorAll(".tool").forEach(b=>b.setAttribute("aria-pressed", b.dataset.tool===t?"true":"false"));
+  vp.className="viewport t-"+t; hint(toolHint()); renderOverlay();
+}
+document.querySelectorAll(".tool").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+
+let spaceDown=false;
+window.addEventListener("keydown",e=>{
+  if(e.target.matches("input,select,textarea")||$("calDlg").open) return;
+  if(S.tool==="aipick"){
+    if(e.key==="Enter"){ e.preventDefault(); traceRooms(); return; }
+    if(e.key==="Backspace"||((e.key==="z"||e.key==="Z")&&(e.metaKey||e.ctrlKey))){ e.preventDefault(); S.aiPicks.pop(); renderOverlay(); return; }
+    if(e.key==="Escape"){ setTool("select"); flash("AI tracing cancelled."); return; }
+    if((e.key==="w"||e.key==="W")&&!e.metaKey&&!e.ctrlKey){ e.preventDefault(); setTool("select"); detect(true); return; }
+  }
+  if(typingOk() && !e.metaKey && !e.ctrlKey){
+    if(/^[0-9.'"\-\/′″]$/.test(e.key)){ S.typed+=e.key; e.preventDefault(); typedHint(); renderOverlay(); return; }
+    if(S.typed && e.key==="Backspace"){ S.typed=S.typed.slice(0,-1); e.preventDefault(); typedHint(); renderOverlay(); return; }
+    if(S.typed && e.key==="Enter"){ e.preventDefault(); placeTyped(); return; }
+    if(S.typed && e.key==="Escape"){ S.typed=""; hint(toolHint()); renderOverlay(); return; }
+  }
+  if(S.sel && (e.key==="Delete"||e.key==="Backspace")){ e.preventDefault(); deleteSel(); return; }
+  if(S.sel && e.key==="Escape"){ S.sel=null; renderOverlay(); renderPop(); return; }
+  if((e.key==="z"||e.key==="Z")&&(e.metaKey||e.ctrlKey)&&!S.draft.length&&!S.meas.length&&!S.cut.length&&!S.accStart&&!S.barrierStart){ e.preventDefault(); undoEdit(); return; }
+  const k=e.key.toLowerCase();
+  if(k===" "){ spaceDown=true; vp.classList.add("t-pan"); e.preventDefault(); return; }
+  const map={v:"select",h:"pan",a:"click",d:"draw",b:"barrier",c:"cal",m:"measure",k:"column",o:"round",e:"exclude",x:"split",t:"access"};
+  if(map[k]&&!e.metaKey&&!e.ctrlKey){ setTool(map[k]); return; }
+  if(e.key==="Escape"){
+    if(S.tool==="measure" && !S.meas.length && S.measures.length){ S.measures=[]; flash("Measurements cleared."); }
+    S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null; renderOverlay(); }
+  if(e.key==="Enter" && S.tool==="draw") finishDraft(e);
+  if(e.key==="Enter" && S.tool==="exclude") finishExclude();
+  if(e.key==="Enter" && S.tool==="measure") finishMeasure(false);
+  if(e.key==="Enter" && S.tool==="split") finishSplit();
+  if((e.key==="z")&&(e.metaKey||e.ctrlKey)&&S.tool==="split"&&S.cut.length){ S.cut.pop(); renderOverlay(); }
+  if((e.key==="z")&&(e.metaKey||e.ctrlKey)&&S.tool==="measure"&&S.meas.length){ S.meas.pop(); renderOverlay(); }
+  if((e.key==="Delete"||e.key==="Backspace") && S.activeId){ deleteRoom(S.activeId); e.preventDefault(); }
+  if((e.key==="z")&&(e.metaKey||e.ctrlKey)&&(S.tool==="draw"||S.tool==="exclude")&&S.draft.length){ S.draft.pop(); renderOverlay(); }
+});
+window.addEventListener("keyup",e=>{ if(e.key===" "){ spaceDown=false; vp.className="viewport t-"+S.tool; } });
+
+/* pointer handling: drag = pan (or vertex move), click = tool action */
+const ptrs=new Map(); let drag=null, pinch=null;
+vp.addEventListener("pointerdown",e=>{
+  if(!S.W) return;
+  try{ vp.setPointerCapture(e.pointerId); }catch(_){} ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y), z:S.view.z}; drag=null; return; }
+  const p=toImg(e);
+  let vertex=null, obj=null;
+  const canObj=e.button===0 && !spaceDown && objToolOk();
+  if(canObj) obj=hitSelEnd(p);
+  if(!obj && S.tool==="select" && S.activeId && e.button===0 && !spaceDown){
+    const r=S.rooms.find(q=>q.id===S.activeId); if(r) vertex=hitVertex(r,p);
+  }
+  if(!obj && !vertex && canObj){ const h=hitObj(p); if(h) obj={...h,end:null}; }
+  if(obj){ obj.start=p; obj.orig=JSON.parse(JSON.stringify(objData(obj))); }
+  drag={sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false,vertex,obj,button:e.button,
+        forcePan: spaceDown || S.tool==="pan" || e.button===1};
+});
+vp.addEventListener("pointermove",e=>{
+  if(!S.W) return;
+  if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch && ptrs.size===2){ const [a,b]=[...ptrs.values()], r=vp.getBoundingClientRect();
+    const d=Math.hypot(a.x-b.x,a.y-b.y); zoomAt((pinch.z*d/pinch.d)/S.view.z,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top); return; }
+  const p=toImg(e);
+  S.hover = ["draw","exclude","measure","column","barrier","cal","split","access"].includes(S.tool) && !drag ? snapPt(p,e) : p;
+  if(!["draw","exclude","measure","column","barrier","cal","split","access"].includes(S.tool) && !(drag&&drag.vertex)) S.snapMark=null;
+  if(drag){
+    const dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
+    if(!drag.moved && Math.hypot(dx,dy)>4) drag.moved=true;
+    if(drag.moved){
+      if(drag.vertex){ const r=S.rooms.find(q=>q.id===S.activeId), ringPts=drag.vertex.ring<0?r.pts:r.holes[drag.vertex.ring], i=drag.vertex.i;
+        let q=snapPt(p,e);
+        if(e.shiftKey){ const prev=ringPts[(i-1+ringPts.length)%ringPts.length]; q=ortho(prev,q); }
+        ringPts[i]=[q[0],q[1]]; renderOverlay(); hint(`Corner: drag to move (snaps to the drawing's lines; Alt = free, Shift = square). ${fmtSf(r)}`); }
+      else if(drag.obj){ moveObj(drag.obj,p,e); }
+      else { vp.classList.add("panning"); S.view.x=drag.vx+dx; S.view.y=drag.vy+dy; applyView(); }
+    }
+    return;
+  }
+  if(((S.tool==="draw"||S.tool==="exclude")&&S.draft.length)||(S.tool==="barrier"&&S.barrierStart)||(S.tool==="cal"&&S.calPts.length===1)||(S.tool==="measure"&&S.meas.length)||S.tool==="column"||S.tool==="round"||S.tool==="access"||S.snapMark||["draw","measure","split"].includes(S.tool)) renderOverlay();
+  if(S.tool==="measure" && S.meas.length && S.pxPerFt){
+    const q=e_shift_hover(S.meas,S.hover||p), seg=lenFt(S.meas[S.meas.length-1],q), tot=pathFt(S.meas.concat([q]),false);
+    hint(`${fmtLen(seg)}` + (S.meas.length>1 ? ` · total ${fmtLen(tot)}` : "") + "  —  click to add a point, double-click or Enter to finish");
+  }
+});
+function endPointer(e){
+  ptrs.delete(e.pointerId);
+  if(pinch){ if(ptrs.size<2) pinch=null; drag=null; return; }
+  if(!drag) return; const d=drag; drag=null; vp.classList.remove("panning");
+  if(d.obj){ S.sel={kind:d.obj.kind,i:d.obj.i}; S.snapMark=null; renderAll(); if(!d.moved) hint(selHint()); return; }
+  if(d.moved){ if(d.vertex){ S.snapMark=null; renderAll(); } return; }
+  if(d.forcePan || d.button!==0) return;
+  onClick(toImg(e), e);
+}
+vp.addEventListener("pointerup",endPointer);
+vp.addEventListener("pointercancel",e=>{ ptrs.delete(e.pointerId); drag=null; pinch=null; });
+vp.addEventListener("dblclick",e=>{ if(S.sel && hitObj(toImg(e))) return;
+  if(S.tool==="draw"){ e.preventDefault(); finishDraft(e); }
+  if(S.tool==="exclude"){ e.preventDefault(); finishExclude(); }
+  if(S.tool==="select" && S.activeId){ e.preventDefault(); const p=toImg(e);
+    // the two clicks of a double-click toggled the room twice; leave it selected
+    insertVertex(p); }
+  if(S.tool==="measure"){ e.preventDefault(); finishMeasure(false); }
+  if(S.tool==="split"){ e.preventDefault(); finishSplit(); } });
+
+function onClick(p,e){
+  const t=S.tool;
+  if(S.sel){ S.sel=null; renderPop(); }
+  if(t==="aipick"){ S.aiPicks.push(p); renderOverlay();
+    hint(`${S.aiPicks.length} room${S.aiPicks.length>1?"s":""} marked. Click inside the next room, or press Enter to trace (about ${S.aiPicks.length*(aiInfo&&aiInfo.trace_model==="claude-sonnet-5-5"?1:4)}¢). Backspace removes the last; Esc cancels.`); return; }
+  if(["draw","exclude","measure","column","barrier","cal","split","access"].includes(t)) p=snapPt(p,e);
+  if(t==="access"){
+    const now=performance.now();
+    if(!S.accStart){ S.accStart=p; S.accT=now; renderOverlay(); hint("Click the other end of the opening, or double-click a wall for a 42\" ADA. Esc cancels."); return; }
+    let b=e.shiftKey?ortho(S.accStart,p):p; const a=S.accStart; S.accStart=null;
+    // double-click: a standard 42" ADA ramp here (a quick second click counts even if the hand moved a little)
+    const dpx=Math.hypot(b[0]-a[0],b[1]-a[1])*S.view.z;
+    if(dpx<6 || (now-S.accT<500 && dpx<25)){ placeAda(a); return; }
+    addAccess(a,b); return;
+  }
+  if(t==="split"){
+    let q=p;
+    if(e.shiftKey && S.cut.length) q=ortho(S.cut[S.cut.length-1],p);
+    const last=S.cut[S.cut.length-1]; if(last && Math.hypot(q[0]-last[0],q[1]-last[1])<2/S.view.z) return;
+    S.cut.push(q); renderOverlay();
+    hint(S.cut.length<2 ? "Now click at the opposite wall. Double-click or Enter to split." : "Double-click or press Enter to split here, or keep clicking to add a bend.");
+    return;
+  }
+  if(t==="round"){
+    if(!S.rcStart){
+      const c=circleAt(p);
+      if(c){ addRoundColumn(c[0],c[1],c[2]); return; }
+      S.rcStart=p; renderOverlay(); hint("No circle drawn here: now click the column's edge. Esc cancels."); return;
+    }
+    const c=S.rcStart, r=Math.hypot(p[0]-c[0],p[1]-c[1]); S.rcStart=null;
+    if(r<2){ flash("Click the column's centre, then its edge."); renderOverlay(); return; }
+    addRoundColumn(c[0],c[1],r); return;
+  }
+  if(t==="column"){
+    if(!S.colStart){ S.colStart=p; renderOverlay(); hint("Click the opposite corner of the column. Esc cancels."); return; }
+    const a=S.colStart, b=p; S.colStart=null;
+    if(Math.abs(b[0]-a[0])<2||Math.abs(b[1]-a[1])<2){ flash("Click two opposite corners of the column."); renderOverlay(); return; }
+    const rect=[[Math.min(a[0],b[0]),Math.min(a[1],b[1])],[Math.max(a[0],b[0]),Math.min(a[1],b[1])],[Math.max(a[0],b[0]),Math.max(a[1],b[1])],[Math.min(a[0],b[0]),Math.max(a[1],b[1])]];
+    const cx=(a[0]+b[0])/2, cy=(a[1]+b[1])/2;
+    const host=S.rooms.filter(r=>inRoom(cx,cy,r)).sort((m,n)=>polyArea(m.pts)-polyArea(n.pts))[0];
+    if(!host){ flash("A column has to be inside a room."); renderOverlay(); return; }
+    host.holes=(host.holes||[]).concat([rect]); S.activeId=host.id; renderAll();
+    flash(`Column added: ${sf(polyArea(rect))!=null?Math.round(sf(polyArea(rect))*10)/10+" SF ":""}taken out of ${host.name}. Alt-click it with the select tool to remove it.`,6000);
+    return;
+  }
+  if(t==="select"){
+    if(e.altKey && altEdit(p)) return;
+    const act=S.rooms.find(q=>q.id===S.activeId);
+    if(act && (hitVertex(act,p) || nearEdge(act,p))) return;     // clicks on its own edges/corners keep it selected
+    const hits=S.rooms.filter(r=>inRoom(p[0],p[1],r)).sort((a,b)=>polyArea(a.pts)-polyArea(b.pts));
+    if(e.shiftKey && act && hits.length && hits[0].id!==act.id){ mergeRooms(act,hits[0]); return; }
+    if(hits.length){ const r=hits[0]; r.include=!r.include; S.activeId=r.id; }
+    else S.activeId=null;
+    renderAll();
+  } else if(t==="click"){ clickDetect(p[0],p[1]); }
+  else if(t==="draw"||t==="exclude"){
+    let q=p;
+    if(e.shiftKey && S.draft.length) q=ortho(S.draft[S.draft.length-1],p);
+    if(S.draft.length>=3 && Math.hypot(q[0]-S.draft[0][0],q[1]-S.draft[0][1])<10/S.view.z){ t==="draw"?finishDraft(e):finishExclude(); return; }
+    // ignore the second click of a double-click
+    const last=S.draft[S.draft.length-1]; if(last && Math.hypot(q[0]-last[0],q[1]-last[1])<2/S.view.z) return;
+    q=[q[0],q[1]]; S.draft.push(q);
+    if(t==="draw" && last && !e.altKey && !e.shiftKey){
+      // follow the wall face from the last corner to this one (filled in when the server answers)
+      q.pending=traceInto(last,q).then(mid=>{ q.via=mid; q.pending=null; renderOverlay(); });
+    }
+    renderOverlay();
+  } else if(t==="barrier"){
+    if(!S.barrierStart){ S.barrierStart=p; }
+    else { const q=e.shiftKey?ortho(S.barrierStart,p):p; pushHist(); S.barriers.push([S.barrierStart,q]); S.barrierStart=null; S.dirty=true; flash("Opening closed. Detect again, or click inside the room with the add tool (A)."); }
+    renderOverlay();
+  } else if(t==="measure"){
+    let q=p;
+    if(e.shiftKey && S.meas.length) q=ortho(S.meas[S.meas.length-1],p);
+    if(S.meas.length>=3 && Math.hypot(q[0]-S.meas[0][0],q[1]-S.meas[0][1])<10/S.view.z){ finishMeasure(true); return; }
+    const last=S.meas[S.meas.length-1]; if(last && Math.hypot(q[0]-last[0],q[1]-last[1])<2/S.view.z) return;
+    S.meas.push(q); renderOverlay(); measureHint();
+  } else if(t==="cal"){
+    S.calPts.push(e.shiftKey&&S.calPts.length?ortho(S.calPts[0],p):p);
+    if(S.calPts.length===2){ renderOverlay(); $("calLen").value=""; $("calDlg").showModal(); }
+    else renderOverlay();
+  }
+}
+/* measuring */
+function fmtLen(ft){
+  if(ft==null) return "—";
+  let inch=Math.round(ft*12*2)/2, f=Math.floor(inch/12), i=inch-f*12;
+  return `${f}′-${i%1?i.toFixed(1):i}″`;
+}
+// Double-click on a room's edge with the access tool: a standard 42" ADA opening, centred on
+// the click along that edge (slid along so it stays on the edge, or the whole edge if shorter)
+function placeAda(p){
+  renderOverlay();
+  if(!S.pxPerFt){ flash("Set the scale first: a standard ADA opening is 42\" wide."); return; }
+  let best=null;
+  for(const r of S.rooms.filter(r=>r.include)) for(let i=0;i<r.pts.length;i++){
+    const a=r.pts[i], b=r.pts[(i+1)%r.pts.length], dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy); if(L<1) continue;
+    const t=Math.max(0,Math.min(L,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L)), q=[a[0]+dx/L*t,a[1]+dy/L*t], d=Math.hypot(q[0]-p[0],q[1]-p[1]);
+    if(!best||d<best.d) best={r,a,b,L,t,d,ux:dx/L,uy:dy/L}; }
+  if(!best || best.d>Math.max(4*S.pxPerFt,25/S.view.z)){ flash("Double-click on the edge of a takeoff room to add a 42\" ADA opening there."); return; }
+  const w=Math.min(3.5*S.pxPerFt,best.L), c=Math.max(w/2,Math.min(best.L-w/2,best.t)), {a,ux,uy}=best;
+  pushHist();
+  S.access.push({a:[a[0]+ux*(c-w/2),a[1]+uy*(c-w/2)], b:[a[0]+ux*(c+w/2),a[1]+uy*(c+w/2)], type:"ada", sides:2, landing:false, room:best.r.name, centred:true});
+  S.sel={kind:"access", i:S.access.length-1};
+  renderAll(); flash(w<3.5*S.pxPerFt-0.5 ? `ADA opening added across the whole edge (${fmtLen(w/S.pxPerFt)}, shorter than 42").` : "42\" ADA opening added. For a custom width, click both ends instead.");
+}
+function lenFt(a,b){ return S.pxPerFt ? Math.hypot(b[0]-a[0],b[1]-a[1])/S.pxPerFt : null; }
+function pathFt(pts,closed){ if(!S.pxPerFt) return null; let t=0; for(let i=1;i<pts.length;i++) t+=lenFt(pts[i-1],pts[i]); if(closed&&pts.length>2) t+=lenFt(pts[pts.length-1],pts[0]); return t; }
+function measureHint(){
+  if(!S.pxPerFt){ hint("Set the drawing scale first to measure in feet."); return; }
+  const pts=S.meas; if(pts.length<2){ hint(TOOL_HINTS.measure); return; }
+  const n=pts.length-1;
+  hint(`Last segment ${fmtLen(lenFt(pts[n-1],pts[n]))}` + (n>1 ? ` · total ${fmtLen(pathFt(pts,false))} over ${n} segments` : "") + ". Double-click or Enter to finish.");
+}
+function finishMeasure(closed){
+  if(S.meas.length<2){ S.meas=[]; renderOverlay(); return; }
+  const m={pts:S.meas.slice(), closed:closed && S.meas.length>=3};
+  pushHist(); S.measures.push(m); S.meas=[]; renderOverlay();
+  const total=pathFt(m.pts,m.closed);
+  hint(m.closed ? `Area ${Math.round(sf(polyArea(m.pts))).toLocaleString()} SF · perimeter ${fmtLen(total)}. Esc twice clears all measurements.`
+                : `Total ${fmtLen(total)}. Click to start another measurement; Esc twice clears all.`);
+}
+function measureSvg(pts, closed, live){
+  const z=S.view.z, fs=12/z; let h="";
+  if(!pts.length) return "";
+  const P=pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+  h+= closed ? `<polygon class="meas area" points="${P}"/>` : `<polyline class="meas" points="${P}"/>`;
+  for(const p of pts) h+=`<circle class="meas-dot" cx="${p[0]}" cy="${p[1]}" r="${3/z}"/>`;
+  const segs=[]; for(let i=1;i<pts.length;i++) segs.push([pts[i-1],pts[i]]); if(closed) segs.push([pts[pts.length-1],pts[0]]);
+  for(const [a,b] of segs){
+    const L=lenFt(a,b); if(L==null) continue;
+    let ang=Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180;
+    const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+    h+=`<text class="mlabel" x="${mx}" y="${my}" dy="${-0.5*fs}" font-size="${fs}" stroke-width="${3/z}" text-anchor="middle" transform="rotate(${ang} ${mx} ${my})">${fmtLen(L)}</text>`;
+  }
+  if(closed && S.pxPerFt){ const [x,y]=labelPoint(pts);
+    h+=`<text class="mlabel" x="${x}" y="${y}" font-size="${fs*1.15}" stroke-width="${3/z}" text-anchor="middle">${Math.round(sf(polyArea(pts))).toLocaleString()} SF</text>`; }
+  return h;
+}
+function edgeLabels(r){
+  // side lengths of the selected room, to check against the plan's dimensions
+  const z=S.view.z, fs=11/z, pts=r.pts; let h="";
+  if(!S.pxPerFt) return "";
+  const [cx,cy]=labelPoint(pts);
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length], L=lenFt(a,b);
+    if(L<2) continue;
+    let ang=Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180;
+    // nudge the label toward the inside of the room
+    let mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2; const nx=-(b[1]-a[1]), ny=b[0]-a[0], nl=Math.hypot(nx,ny)||1;
+    const s=((cx-mx)*nx+(cy-my)*ny)>0?1:-1; mx+=s*nx/nl*fs*0.9; my+=s*ny/nl*fs*0.9;
+    h+=`<text class="elabel" x="${mx}" y="${my}" font-size="${fs}" stroke-width="${3/z}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${ang} ${mx} ${my})">${fmtLen(L)}</text>`;
+  }
+  return h;
+}
+function hitVertex(r,p){
+  const tol=8/S.view.z; let best=null;
+  const test=(pts,ring)=>pts.forEach((q,i)=>{ const d=Math.hypot(q[0]-p[0],q[1]-p[1]); if(d<tol && (!best||d<best.d)) best={ring,i,d}; });
+  test(r.pts,-1); (r.holes||[]).forEach((h,k)=>test(h,k));
+  return best;
+}
+function altEdit(p){
+  // Alt-click: delete a corner, or remove a column
+  const r=S.rooms.find(q=>q.id===S.activeId); if(!r) return false;
+  const v=hitVertex(r,p);
+  if(v){ const ringPts=v.ring<0?r.pts:r.holes[v.ring];
+    if(ringPts.length>3) ringPts.splice(v.i,1);
+    else if(v.ring>=0) r.holes.splice(v.ring,1);
+    else { flash("A room needs at least three corners."); return true; }
+    renderAll(); return true; }
+  const k=(r.holes||[]).findIndex(h=>inPoly(p[0],p[1],h));
+  if(k>=0){ r.holes.splice(k,1); renderAll(); flash("Column removed."); return true; }
+  return false;
+}
+function nearEdge(r,p){
+  const tol=8/S.view.z; let best=null;
+  const test=(pts,ring)=>{ for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];
+    const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2));
+    const q=[a[0]+t*dx,a[1]+t*dy], d=Math.hypot(q[0]-p[0],q[1]-p[1]);
+    if(d<tol && t>0.02 && t<0.98 && (!best||d<best.d)) best={ring,i,q,d}; } };
+  test(r.pts,-1); (r.holes||[]).forEach((h,k)=>test(h,k));
+  return best;
+}
+function insertVertex(p){
+  // Double-click on an edge of the selected room (or a column) adds a corner there
+  const r=S.rooms.find(q=>q.id===S.activeId); if(!r) return false;
+  const best=nearEdge(r,p);
+  if(!best) return false;
+  (best.ring<0?r.pts:r.holes[best.ring]).splice(best.i+1,0,best.q); renderAll();
+  flash("Corner added. Drag it into place.");
+  return true;
+}
+/* splitting an area along a cut line */
+function segX(a,b,c,d){
+  // intersection of segments ab and cd: [t on ab, u on cd] or null
+  const rx=b[0]-a[0], ry=b[1]-a[1], sx=d[0]-c[0], sy=d[1]-c[1], den=rx*sy-ry*sx;
+  if(Math.abs(den)<1e-12) return null;
+  const t=((c[0]-a[0])*sy-(c[1]-a[1])*sx)/den, u=((c[0]-a[0])*ry-(c[1]-a[1])*rx)/den;
+  return (t>=-1e-9 && t<=1+1e-9 && u>=-1e-9 && u<=1+1e-9) ? [t,u] : null;
+}
+function splitRing(P, cut){
+  // Cut polygon P along polyline `cut` (its ends are extended to the walls).
+  if(cut.length<2) return null;
+  const n=cut.length, BIG=1e5;
+  const ext=(a,b)=>{ const dx=a[0]-b[0], dy=a[1]-b[1], L=Math.hypot(dx,dy)||1; return [a[0]+dx/L*BIG, a[1]+dy/L*BIG]; };
+  const path=[ext(cut[0],cut[1])].concat(cut,[ext(cut[n-1],cut[n-2])]);
+  const cum=[0]; for(let j=1;j<path.length;j++) cum.push(cum[j-1]+Math.hypot(path[j][0]-path[j-1][0],path[j][1]-path[j-1][1]));
+  const m=P.length, hits=[];
+  for(let j=0;j<path.length-1;j++) for(let i=0;i<m;i++){
+    const x=segX(path[j],path[j+1],P[i],P[(i+1)%m]); if(!x) continue;
+    const len=cum[j+1]-cum[j];
+    hits.push({s:cum[j]+x[0]*len, j, e:i, u:x[1], pt:[P[i][0]+x[1]*(P[(i+1)%m][0]-P[i][0]), P[i][1]+x[1]*(P[(i+1)%m][1]-P[i][1])]});
+  }
+  hits.sort((a,b)=>a.s-b.s);
+  const dedup=[]; for(const h of hits) if(!dedup.length || h.s-dedup[dedup.length-1].s>1e-6) dedup.push(h);
+  // the boundary crossing pair whose inside stretch overlaps the clicked part of the line the most
+  const s0=cum[1], s1=cum[n]; let best=null;
+  for(let k=0;k+1<dedup.length;k++){
+    const A=dedup[k], B=dedup[k+1], sm=(A.s+B.s)/2;
+    const mid=pointAt(path,cum,sm); if(!inPoly(mid[0],mid[1],P)) continue;
+    const ov=Math.min(B.s,s1)-Math.max(A.s,s0)+(B.s-A.s)*1e-6;
+    if(!best || ov>best.ov) best={A,B,ov};
+  }
+  if(!best) return null;
+  const {A,B}=best;
+  const mids=[]; for(let j=A.j+1;j<=B.j;j++) mids.push(path[j]);
+  const walk=(e1,u1,e2,u2)=>{ const out=[]; if(e1===e2 && u2>=u1) return out;
+    let k=e1+1; for(let guard=0;guard<=m;guard++){ out.push(P[k%m]); if(k%m===e2) break; k++; } return out; };
+  const p1=[A.pt,...mids,B.pt,...walk(B.e,B.u,A.e,A.u)];
+  const p2=[B.pt,...mids.slice().reverse(),A.pt,...walk(A.e,A.u,B.e,B.u)];
+  const a=polyArea(P), a1=polyArea(p1), a2=polyArea(p2);
+  if(a1<1 || a2<1 || Math.abs(a1+a2-a)>0.01*a) return null;
+  return [p1,p2];
+}
+function pointAt(path,cum,s){
+  for(let j=1;j<path.length;j++) if(cum[j]>=s){ const t=(s-cum[j-1])/((cum[j]-cum[j-1])||1);
+    return [path[j-1][0]+t*(path[j][0]-path[j-1][0]), path[j-1][1]+t*(path[j][1]-path[j-1][1])]; }
+  return path[path.length-1];
+}
+function finishSplit(){
+  const cut=S.cut.slice(); S.cut=[];
+  if(cut.length<2){ flash("Click at least two points across the area."); renderOverlay(); return; }
+  // which area: the selected one if the cut crosses it, otherwise the one under the cut
+  const mid=[(cut[0][0]+cut[1][0])/2,(cut[0][1]+cut[1][1])/2];
+  const cands=S.rooms.filter(r=>r.id===S.activeId).concat(
+    S.rooms.filter(r=>r.id!==S.activeId && cut.some((p,i)=>i>0 && inPoly((p[0]+cut[i-1][0])/2,(p[1]+cut[i-1][1])/2,r.pts)))
+           .sort((x,y)=>polyArea(x.pts)-polyArea(y.pts)));
+  for(const r of cands){
+    const parts=splitRing(r.pts,cut); if(!parts) continue;
+    const base=r.name.replace(/ · [A-Z]$/,"");
+    const holes=r.holes||[];
+    const holesFor=pts=>holes.filter(h=>{ const c=h.reduce((s,p)=>[s[0]+p[0]/h.length,s[1]+p[1]/h.length],[0,0]); return inPoly(c[0],c[1],pts); });
+    const used=new Set(S.rooms.filter(q=>q.name.startsWith(base+" · ")).map(q=>q.name.slice(-1)));
+    const nextLetter=()=>{ for(const L of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") if(!used.has(L)){ used.add(L); return L; } return "?"; };
+    if(!/ · [A-Z]$/.test(r.name)) r.name=`${base} · ${nextLetter()}`;
+    const r2=addRoom(parts[1],"drawn"); Object.assign(r2,{name:`${base} · ${nextLetter()}`, number:r.number||null, include:r.include, layers:(r.layers||[]).map(l=>({...l})), finishByPliteq:!!r.finishByPliteq, holes:holesFor(parts[1])});
+    r.pts=parts[0]; r.holes=holesFor(parts[0]); r.source="drawn";
+    // keep the new piece next to its sibling in the list
+    S.rooms.splice(S.rooms.indexOf(r2),1); S.rooms.splice(S.rooms.indexOf(r)+1,0,r2);
+    S.activeId=r2.id; setTool("select"); renderAll();
+    flash(`Split ${base} into ${r.name.slice(-1)} (${fmtSf(r)}) and ${r2.name.slice(-1)} (${fmtSf(r2)}). Pick a buildup for each in the Rooms list.`, 9000);
+    return;
+  }
+  flash("That line doesn't cross an area from wall to wall. Start and end the cut on the area's walls.", 7000); renderOverlay();
+}
+function ortho(a,p){ return Math.abs(p[0]-a[0])>Math.abs(p[1]-a[1]) ? [p[0],a[1]] : [a[0],p[1]]; }
+// part of polygon `subject` inside convex polygon `clip` (Sutherland-Hodgman)
+function clipConvex(subject, clip){
+  const a2=q=>{ let a=0; for(let i=0;i<q.length;i++){ const p0=q[(i+q.length-1)%q.length], p1=q[i]; a+=p0[0]*p1[1]-p1[0]*p0[1]; } return a; };
+  const sg=a2(clip)>0?1:-1;
+  const inside=(p,a,b)=>sg*((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))>=-1e-9;
+  const cross=(p,q,a,b)=>{ const d=(p[0]-q[0])*(a[1]-b[1])-(p[1]-q[1])*(a[0]-b[0]); if(Math.abs(d)<1e-12) return q.slice();
+    const t=((p[0]-a[0])*(a[1]-b[1])-(p[1]-a[1])*(a[0]-b[0]))/d; return [p[0]+t*(q[0]-p[0]), p[1]+t*(q[1]-p[1])]; };
+  let out=subject.map(p=>p.slice());
+  for(let i=0;i<clip.length && out.length;i++){
+    const a=clip[(i+clip.length-1)%clip.length], b=clip[i], inp=out; out=[];
+    for(let j=0;j<inp.length;j++){ const p=inp[(j+inp.length-1)%inp.length], q=inp[j];
+      if(inside(q,a,b)){ if(!inside(p,a,b)) out.push(cross(p,q,a,b)); out.push(q); }
+      else if(inside(p,a,b)) out.push(cross(p,q,a,b)); }
+  }
+  return out;
+}
+function isConvex(q){ let sgn=0; for(let i=0;i<q.length;i++){ const a=q[i], b=q[(i+1)%q.length], c=q[(i+2)%q.length];
+  const z=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]); if(Math.abs(z)<1e-9) continue; const s1=z>0?1:-1; if(sgn&&s1!==sgn) return false; sgn=s1; } return true; }
+function finishExclude(){
+  const ex=S.draft.slice();
+  if(ex.length<3){ flash("An exclusion needs at least three corners."); return; }
+  // the room it belongs to: the one holding most of its corners (or its middle)
+  const mid=[ex.reduce((a,p)=>a+p[0],0)/ex.length, ex.reduce((a,p)=>a+p[1],0)/ex.length];
+  const score=r=>ex.filter(p=>inPoly(p[0],p[1],r.pts)).length+(inPoly(mid[0],mid[1],r.pts)?0.5:0);
+  const host=S.rooms.filter(r=>score(r)>0).sort((m,n)=>score(n)-score(m)||polyArea(m.pts)-polyArea(n.pts))[0];
+  if(!host){ flash("Draw the exclusion over a room."); return; }
+  let hole=ex;
+  if(!ex.every(p=>inPoly(p[0],p[1],host.pts))){
+    // it runs past the room's edge: keep only the part inside the room
+    if(!isConvex(ex)){ flash("This exclusion runs past the room's edge and isn't convex. Keep it inside the room, or draw it as two simpler pieces."); return; }
+    hole=clipConvex(host.pts, ex);
+    if(hole.length<3 || polyArea(hole)<1){ flash("That exclusion doesn't overlap the room."); return; }
+  }
+  host.holes=(host.holes||[]).concat([hole]); S.activeId=host.id; S.draft=[]; renderAll();
+  flash(`Exclusion of ${sf(polyArea(hole))!=null?Math.round(sf(polyArea(hole))*10)/10+" SF ":""}taken out of ${host.name}. Drag its corners to adjust; Alt-click inside it with the select tool to remove it.`,7000);
+}
+// the wall face between two corners being drawn: the points in between, or null (straight)
+async function traceInto(a,b){
+  if(!S.plan || !S.pxPerFt) return null;
+  const R=S.renderScale;
+  try{
+    const d=await api("/api/trace",{plan:S.plan, page:S.pageNum, in_per_ft:inPerFt(), a:[a[0]/R,a[1]/R], b:[b[0]/R,b[1]/R]});
+    return d.path && d.path.length>2 ? d.path.slice(1,-1).map(([x,y])=>[x*R,y*R]) : null;
+  }catch(err){ return null; }
+}
+function draftPath(draft){
+  const out=[]; for(const p of draft){ if(p.via) out.push(...p.via); out.push([p[0],p[1]]); } return out;
+}
+let finishing=false;
+async function finishDraft(e){
+  if(S.draft.length<3){ flash("A room needs at least three corners."); return; }
+  if(finishing) return; finishing=true;
+  try{
+    const draft=S.draft;
+    const close = (e && (e.altKey||e.shiftKey)) ? null : await traceInto(draft[draft.length-1], draft[0]);
+    await Promise.all(draft.map(p=>p.pending).filter(Boolean));
+    if(S.draft!==draft) return;
+    const pts=draftPath(draft); if(close) pts.push(...close);
+    const r=addRoom(pts,"drawn"); r.include=true; S.activeId=r.id; S.draft=[]; renderAll();
+  } finally { finishing=false; }
+}
+
+let shiftDown=false;
+window.addEventListener("keydown",e=>{ if(e.key==="Shift") shiftDown=true; });
+window.addEventListener("keyup",e=>{ if(e.key==="Shift") shiftDown=false; });
+function e_shift_hover(pts, hv){ return shiftDown && pts.length ? ortho(pts[pts.length-1], hv) : hv; }
+
+/* calibration */
+function parseFeet(s){
+  s=s.trim().replace(/[’′]/g,"'").replace(/[”″]/g,'"');
+  let m=s.match(/^(\d+(?:\.\d+)?)\s*'\s*-?\s*(?:(\d+(?:\.\d+)?)\s*(?:(\d+)\/(\d+))?\s*(?:"|'')?)?$/);
+  if(m){ let ft=+m[1], inch=m[2]?+m[2]:0; if(m[3]) inch+= +m[3]/+m[4]; return ft+inch/12; }
+  m=s.match(/^(\d+(?:\.\d+)?)\s*(?:"|in)$/); if(m) return +m[1]/12;
+  m=s.match(/^(\d+)\s*-\s*(\d+(?:\.\d+)?)\s*"?$/); if(m) return +m[1]+ +m[2]/12;
+  m=s.match(/^(\d+(?:\.\d+)?)\s*(?:ft)?$/); if(m) return +m[1];
+  return NaN;
+}
+$("calCancel").onclick=()=>{ $("calDlg").close(); S.calPts=[]; renderOverlay(); };
+$("calOk").onclick=()=>{
+  const ft=parseFeet($("calLen").value);
+  if(!(ft>0)){ $("calLen").setCustomValidity("Enter a length like 24'-6\" or 24.5"); $("calLen").reportValidity(); return; }
+  $("calLen").setCustomValidity("");
+  const [a,b]=S.calPts; S.calPxPerFt=Math.hypot(b[0]-a[0],b[1]-a[1])/ft;
+  $("calDlg").close(); S.calPts=[]; $("scaleSel").value="cal"; updateScale(); renderAll();
+  flash(`Scale set: ${S.calPxPerFt.toFixed(2)} px per foot.`); setTool("select");
+};
+$("calLen").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("calOk").click(); } });
+
+/* ---------- rendering ---------- */
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtSf(r){ const a=sf(roomArea(r)); return a==null?"— SF":`${Math.round(a).toLocaleString()} SF`; }
+/* ---------- editing things on the plan: select, drag, type a length, delete, undo ---------- */
+S.sel=null; S.typed=""; const hist=[];
+function pushHist(){ hist.push(JSON.stringify({access:S.access, measures:S.measures, barriers:S.barriers})); if(hist.length>60) hist.shift(); }
+function undoEdit(){
+  if(!hist.length){ flash("Nothing to undo."); return; }
+  const d=JSON.parse(hist.pop()), bChanged=JSON.stringify(d.barriers)!==JSON.stringify(S.barriers);
+  S.access=d.access; S.measures=d.measures; S.barriers=d.barriers; if(bChanged) S.dirty=true;
+  S.sel=null; renderAll(); flash("Undone.");
+}
+function objToolOk(){
+  const t=S.tool;
+  return t==="select" || (t==="access" && !S.accStart) || (t==="measure" && !S.meas.length) || (t==="barrier" && !S.barrierStart);
+}
+function objData(o){ return o.kind==="access"?S.access[o.i]:o.kind==="barrier"?S.barriers[o.i]:S.measures[o.i]; }
+function objPts(o){ const d=objData(o); if(!d) return null;
+  return o.kind==="access"?[d.a,d.b]:o.kind==="barrier"?[d[0],d[1]]:(d.closed?d.pts.concat([d.pts[0]]):d.pts); }
+function objEnds(o){ const d=objData(o); if(!d) return [];
+  return o.kind==="access"?[["a",d.a],["b",d.b]]:o.kind==="barrier"?[[0,d[0]],[1,d[1]]]:d.pts.map((p,i)=>[i,p]); }
+function segD(p,a,b){ const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9, t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2));
+  return Math.hypot(a[0]+dx*t-p[0], a[1]+dy*t-p[1]); }
+function hitObj(p){
+  const tol=7/S.view.z; let best=null;
+  const test=(kind,i,pts)=>{ for(let k=1;k<pts.length;k++){ const d=segD(p,pts[k-1],pts[k]); if(d<tol && (!best||d<best.d)) best={kind,i,d}; } };
+  if(S.slab!=="recessed") S.access.forEach((x,i)=>test("access",i,[x.a,x.b]));
+  S.barriers.forEach((b,i)=>test("barrier",i,b));
+  S.measures.forEach((m,i)=>test("measure",i,m.closed?m.pts.concat([m.pts[0]]):m.pts));
+  return best?{kind:best.kind,i:best.i}:null;
+}
+function hitSelEnd(p){
+  if(!S.sel) return null; const tol=8/S.view.z;
+  for(const [end,q] of objEnds(S.sel)) if(Math.hypot(q[0]-p[0],q[1]-p[1])<tol) return {...S.sel,end};
+  return null;
+}
+function moveObj(o,p,e){
+  if(!o.pushed){ pushHist(); o.pushed=true; }
+  const O=o.orig, dx=p[0]-o.start[0], dy=p[1]-o.start[1];
+  if(o.kind==="access"){
+    const x=S.access[o.i], L=Math.hypot(O.b[0]-O.a[0],O.b[1]-O.a[1])||1, u=[(O.b[0]-O.a[0])/L,(O.b[1]-O.a[1])/L];
+    if(o.end==null){ const s=dx*u[0]+dy*u[1];                // slide along its wall
+      x.a=[O.a[0]+u[0]*s,O.a[1]+u[1]*s]; x.b=[O.b[0]+u[0]*s,O.b[1]+u[1]*s]; }
+    else { const q=snapPt(p,e), fix=o.end==="a"?O.b:O.a, dir=o.end==="a"?[-u[0],-u[1]]:u;   // stretch along its wall
+      const s=Math.max((S.pxPerFt||12)/4,(q[0]-fix[0])*dir[0]+(q[1]-fix[1])*dir[1]);
+      x[o.end]=[fix[0]+dir[0]*s,fix[1]+dir[1]*s]; x.centred=false; }
+    hint(`Transition ${o.i+1}: ${fmtLen(lenFt(x.a,x.b))}. Drag an end to change its length, the middle to slide it along the wall.`);
+  } else if(o.kind==="barrier"){
+    const b=S.barriers[o.i];
+    if(o.end==null){ b[0]=[O[0][0]+dx,O[0][1]+dy]; b[1]=[O[1][0]+dx,O[1][1]+dy]; }
+    else { let q=snapPt(p,e); if(e.shiftKey) q=ortho(b[1-o.end],q); b[o.end]=q; }
+    S.dirty=true; hint(`Closed opening: ${fmtLen(lenFt(b[0],b[1]))}`);
+  } else {
+    const m=S.measures[o.i];
+    if(o.end==null) m.pts=O.pts.map(q=>[q[0]+dx,q[1]+dy]);
+    else { let q=snapPt(p,e); const n=m.pts.length; if(e.shiftKey && n>1) q=ortho(m.pts[o.end>0?o.end-1:1],q); m.pts[o.end]=q; }
+    hint(selHint());
+  }
+  renderOverlay();
+}
+function deleteSel(){
+  const o=S.sel; if(!o||!objData(o)) { S.sel=null; return; }
+  pushHist();
+  if(o.kind==="access") S.access.splice(o.i,1);
+  else if(o.kind==="barrier"){ S.barriers.splice(o.i,1); S.dirty=true; }
+  else S.measures.splice(o.i,1);
+  S.sel=null; renderAll(); flash(`${o.kind==="access"?"Transition":o.kind==="barrier"?"Closed opening":"Measurement"} deleted. Cmd/Ctrl-Z brings it back.`);
+}
+function setAccLen(x,ft){
+  if(!S.pxPerFt||!(ft>0)) return;
+  pushHist();
+  const L=Math.hypot(x.b[0]-x.a[0],x.b[1]-x.a[1])||1, u=[(x.b[0]-x.a[0])/L,(x.b[1]-x.a[1])/L], n=ft*S.pxPerFt;
+  if(x.centred){ const c=[(x.a[0]+x.b[0])/2,(x.a[1]+x.b[1])/2]; x.a=[c[0]-u[0]*n/2,c[1]-u[1]*n/2]; x.b=[c[0]+u[0]*n/2,c[1]+u[1]*n/2]; }
+  else x.b=[x.a[0]+u[0]*n,x.a[1]+u[1]*n];
+  renderAll();
+}
+function addAccess(a,b){
+  pushHist();
+  const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  const near=S.rooms.filter(r=>r.include).map(r=>({r,d:distToRing(mid,r.pts)})).sort((x,y)=>x.d-y.d)[0];
+  S.access.push({a,b,type:S.access.some(x=>x.type==="ada")?"std":"ada",sides:2,landing:false,room:near?near.r.name:""});
+  S.sel={kind:"access", i:S.access.length-1};
+  renderAll(); flash(`Transition added (${fmtLen(lenFt(a,b))}). Change its type or length in the box beside it.`);
+}
+function selHint(){
+  const o=S.sel, d=o&&objData(o); if(!d) return toolHint();
+  if(o.kind==="access") return `Transition ${o.i+1}: ${fmtLen(lenFt(d.a,d.b))}. Drag its ends to resize, the middle to slide it. Delete removes it.`;
+  if(o.kind==="barrier") return `Closed opening: ${fmtLen(lenFt(d[0],d[1]))}. Drag its ends to adjust. Delete removes it.`;
+  return `Measurement: ${measText(d)}. Drag a point to move it. Delete removes it.`;
+}
+function measText(m){ const t=pathFt(m.pts,m.closed); return m.closed&&S.pxPerFt ? `${Math.round(sf(polyArea(m.pts))).toLocaleString()} SF, perimeter ${fmtLen(t)}` : fmtLen(t); }
+function selSvg(z){
+  if(!S.sel) return ""; const pts=objPts(S.sel); if(!pts){ S.sel=null; return ""; }
+  let h=`<polyline class="selhalo" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
+  for(const [,q] of objEnds(S.sel)) h+=`<circle class="selend" cx="${q[0]}" cy="${q[1]}" r="${5/z}"/>`;
+  return h;
+}
+/* typing a length while measuring or marking an opening */
+function typingOk(){ return S.W && ((S.tool==="measure"&&S.meas.length) || (S.tool==="access"&&S.accStart) || (S.tool==="barrier"&&S.barrierStart)); }
+function typedHint(){ hint(S.typed ? `Length: ${S.typed}. Press Enter to place it toward the cursor, Backspace to edit, Esc to cancel. Plain numbers are feet; 42" is inches; 3'6 or 3-6 is feet and inches.` : toolHint()); }
+function typedPoint(){
+  if(!S.typed || !typingOk() || !S.pxPerFt) return null;
+  const ft=parseFeet(S.typed.replace(/′/g,"'").replace(/″/g,'"')); if(!(ft>0)) return null;
+  const o=S.tool==="measure"?S.meas[S.meas.length-1]:S.tool==="access"?S.accStart:S.barrierStart;
+  let hv=S.hover||[o[0]+1,o[1]]; if(shiftDown) hv=ortho(o,hv);
+  let ang=(hv[0]===o[0]&&hv[1]===o[1])?0:Math.atan2(hv[1]-o[1],hv[0]-o[0]);
+  const sq=Math.round(ang/(Math.PI/2))*(Math.PI/2); if(Math.abs(ang-sq)<8*Math.PI/180) ang=sq;   // near square: square
+  return {o, ft, q:[o[0]+Math.cos(ang)*ft*S.pxPerFt, o[1]+Math.sin(ang)*ft*S.pxPerFt]};
+}
+function placeTyped(){
+  if(!S.pxPerFt){ flash("Set the drawing scale first."); return; }
+  const tp=typedPoint(); if(!tp){ flash(`"${S.typed}" isn't a length. Try 12'6, 42", 3-6 or 12.5.`); return; }
+  S.typed="";
+  if(S.tool==="measure"){ S.meas.push(tp.q); renderOverlay(); measureHint(); }
+  else if(S.tool==="access"){ S.accStart=null; addAccess(tp.o,tp.q); }
+  else { pushHist(); S.barriers.push([tp.o,tp.q]); S.barrierStart=null; S.dirty=true; renderOverlay(); flash("Opening closed."); }
+}
+/* the little box beside the selected thing */
+let popKey="";
+function renderPop(){
+  const pop=$("objPop"), o=S.sel, d=o&&objData(o);
+  if(!d||!S.W){ pop.hidden=true; popKey=""; return; }
+  popKey=o.kind+o.i; pop.innerHTML=""; pop.hidden=false;
+  const stop=el=>{ el.addEventListener("pointerdown",e=>e.stopPropagation()); el.addEventListener("dblclick",e=>e.stopPropagation()); };
+  stop(pop);
+  const lab=document.createElement("b");
+  const del=document.createElement("button"); del.className="danger"; del.textContent="Delete"; del.title="Delete (Delete key)"; del.onclick=deleteSel;
+  if(o.kind==="access"){
+    lab.textContent=`Transition ${o.i+1}`;
+    const len=document.createElement("input"); len.value=fmtLen(lenFt(d.a,d.b)); len.title="Type a length, e.g. 42\" or 3'6, then Enter";
+    len.onkeydown=e=>{ e.stopPropagation(); if(e.key==="Enter"){ const ft=parseFeet(len.value.replace(/′/g,"'").replace(/″/g,'"')); if(ft>0) setAccLen(d,ft); else flash("Enter a length like 42\" or 3'6."); }
+      if(e.key==="Escape"){ S.sel=null; renderAll(); } };
+    const ty=document.createElement("select"); ty.innerHTML='<option value="std">Standard</option><option value="ada">ADA ramp</option>'; ty.value=d.type;
+    ty.onchange=()=>{ pushHist(); d.type=ty.value; renderAll(); };
+    const ada=document.createElement("button"); ada.textContent='42"'; ada.title="Make it a standard 42\" ADA opening";
+    ada.onclick=()=>{ d.centred=true; setAccLen(d,3.5); };
+    pop.append(lab,len,ty,ada,del);
+  } else if(o.kind==="barrier"){
+    lab.textContent="Closed opening"; const s=document.createElement("span"); s.className="muted"; s.textContent=fmtLen(lenFt(d[0],d[1]));
+    pop.append(lab,s,del);
+  } else {
+    lab.textContent="Measurement"; const s=document.createElement("span"); s.className="muted"; s.textContent=measText(d);
+    pop.append(lab,s,del);
+  }
+  placePop();
+}
+function placePop(){
+  const pop=$("objPop"); if(pop.hidden) return;
+  const o=S.sel, pts=o&&objPts(o); if(!pts){ pop.hidden=true; return; }
+  if(popKey!==o.kind+o.i){ renderPop(); return; }
+  const v=S.view, xs=pts.map(p=>p[0]*v.z+v.x), ys=pts.map(p=>p[1]*v.z+v.y), r=vp.getBoundingClientRect();
+  const w=pop.offsetWidth, ht=pop.offsetHeight;
+  let x=(Math.min(...xs)+Math.max(...xs))/2-w/2, y=Math.min(...ys)-ht-22;
+  if(y<6) y=Math.max(...ys)+22;
+  pop.style.left=Math.max(6,Math.min(r.width-w-6,x))+"px"; pop.style.top=Math.max(6,Math.min(r.height-ht-6,y))+"px";
+}
+function renderOverlay(){
+  if(!S.W){ ov.innerHTML=""; return; }
+  const z=S.view.z, fs=13/z, hr=3.5/z; let h="";
+  const ring=pts=>"M"+pts.map(p=>p[0].toFixed(2)+","+p[1].toFixed(2)).join("L")+"Z";
+  const shown=r=>S.step==="rooms" || r.include;
+  for(const r of S.rooms){
+    if(!shown(r)) continue;
+    const cls="room"+(r.include?" inc":"")+(r.id===S.activeId?" active":"");
+    const c=r.include && r.id!==S.activeId ? buColor(r) : null;
+    h+=`<path class="${cls}" fill-rule="evenodd"${c?` style="fill:${c};stroke:${c}"`:""} d="${ring(r.pts)+(r.holes||[]).map(ring).join("")}"/>`;
+  }
+  for(const r of S.rooms){
+    if(!shown(r)) continue;
+    const [x,y]=labelPoint(r.pts);
+    h+=`<text class="rlabel" x="${x}" y="${y}" font-size="${fs}" stroke-width="${3/z}" text-anchor="middle"><tspan x="${x}">${esc(r.name)}</tspan><tspan class="a" x="${x}" dy="${fs*1.15}">${fmtSf(r)}</tspan></text>`;
+  }
+  for(const b of S.barriers) h+=`<line class="barrier" x1="${b[0][0]}" y1="${b[0][1]}" x2="${b[1][0]}" y2="${b[1][1]}"/>`;
+  const act=S.rooms.find(r=>r.id===S.activeId);
+  const hv=S.hover;
+  const handle=(p,cls)=>{ const d=4/z; return `<rect class="handle${cls||""}" x="${p[0]-d}" y="${p[1]-d}" width="${2*d}" height="${2*d}"/><circle class="hdot" cx="${p[0]}" cy="${p[1]}" r="${0.9/z}"/>`; };
+  if(act && S.tool==="select" && S.step==="rooms"){ h+=edgeLabels(act); for(const p of act.pts) h+=handle(p);
+    for(const hole of (act.holes||[])) if(hole.length<=16) for(const p of hole) h+=handle(p," col"); }
+  for(const m of S.measures) h+=measureSvg(m.pts, m.closed);
+  if(S.tool==="measure" && S.meas.length){ const pts=S.meas.slice(); if(hv) pts.push(e_shift_hover(pts, hv)); h+=measureSvg(pts,false,true); }
+  if(S.tool==="split" && S.cut.length){ const pts=S.cut.concat(hv?[e_shift_hover(S.cut,hv)]:[]);
+    h+=`<polyline class="draft" points="${pts.map(p=>p.join(",")).join(" ")}"/>`; for(const p of S.cut) h+=handle(p); }
+  if(S.tool==="round"){
+    if(S.rcStart && hv){ const c=S.rcStart, r=Math.hypot(hv[0]-c[0],hv[1]-c[1]);
+      h+=`<circle class="coldraft" cx="${c[0]}" cy="${c[1]}" r="${r}"/>`;
+      if(S.pxPerFt) h+=`<text class="mlabel" x="${c[0]}" y="${c[1]-r}" dy="${-0.5*fs}" font-size="${fs*0.9}" stroke-width="${3/z}" text-anchor="middle">${fmtLen(2*r/S.pxPerFt)} across</text>`; }
+    else if(hv){ const c=circleAt(hv); if(c) h+=`<circle class="coldraft" cx="${c[0]}" cy="${c[1]}" r="${c[2]}"/>`; }
+  }
+  if(S.tool==="column" && S.colStart && hv){ const a=S.colStart, b=hv;
+    h+=`<rect class="coldraft" x="${Math.min(a[0],b[0])}" y="${Math.min(a[1],b[1])}" width="${Math.abs(b[0]-a[0])}" height="${Math.abs(b[1]-a[1])}"/>`;
+    if(S.pxPerFt) h+=`<text class="mlabel" x="${(a[0]+b[0])/2}" y="${Math.min(a[1],b[1])}" dy="${-0.5*fs}" font-size="${fs*0.9}" stroke-width="${3/z}" text-anchor="middle">${fmtLen(Math.abs(b[0]-a[0])/S.pxPerFt)} × ${fmtLen(Math.abs(b[1]-a[1])/S.pxPerFt)}</text>`; }
+  for(const [i,x] of S.access.entries()){ if(S.slab==="recessed") break;
+    const c=x.type==="ada"?"#D0453A":"#00838F", mx=(x.a[0]+x.b[0])/2, my=(x.a[1]+x.b[1])/2;
+    h+=`<line x1="${x.a[0]}" y1="${x.a[1]}" x2="${x.b[0]}" y2="${x.b[1]}" stroke="${c}" stroke-width="4" stroke-linecap="butt" vector-effect="non-scaling-stroke" opacity=".9"/>`;
+    h+=`<text class="mlabel" x="${mx}" y="${my}" dy="${-0.6*fs}" font-size="${fs*0.85}" stroke-width="${3/z}" text-anchor="middle" style="fill:${c}">${i+1} ${x.type==="ada"?"ADA":"STD"} ${fmtLen(lenFt(x.a,x.b))}</text>`; }
+  h+=selSvg(z);
+  const tp=typedPoint();
+  if(tp){ h+=`<line x1="${tp.o[0]}" y1="${tp.o[1]}" x2="${tp.q[0]}" y2="${tp.q[1]}" stroke="#E65100" stroke-width="2.5" stroke-dasharray="6 3" vector-effect="non-scaling-stroke"/>`;
+    h+=`<text class="typed" x="${tp.q[0]}" y="${tp.q[1]}" dy="${-0.7*fs}" font-size="${fs}" stroke-width="${3/z}" text-anchor="middle">${esc(S.typed)} = ${fmtLen(tp.ft)} ↵</text>`; }
+  else if(typingOk() && S.typed && hv) h+=`<text class="typed" x="${hv[0]}" y="${hv[1]}" dy="${-0.9*fs}" font-size="${fs}" stroke-width="${3/z}" text-anchor="middle">${esc(S.typed)}…</text>`;
+  if(S.tool==="access" && S.accStart && hv && !tp) h+=`<line x1="${S.accStart[0]}" y1="${S.accStart[1]}" x2="${hv[0]}" y2="${hv[1]}" stroke="#00838F" stroke-width="3" vector-effect="non-scaling-stroke" opacity=".7"/>`;
+  if(S.snapMark){ const m=S.snapMark, d=5/z; h+=`<rect class="snapmark" x="${m[0]-d}" y="${m[1]-d}" width="${2*d}" height="${2*d}"/>`; }
+  if(S.tool==="draw" && S.draft.length){
+    const pts=draftPath(S.draft); if(hv) pts.push(hv);
+    h+=`<polyline class="draft" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
+    for(const p of S.draft) h+=handle(p);
+  }
+  if(S.tool==="exclude" && S.draft.length){
+    const pts=S.draft.slice(); if(hv) pts.push(e_shift_hover(S.draft,hv));
+    h+=`<polygon class="coldraft" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
+    for(const p of S.draft) h+=handle(p);
+    if(S.pxPerFt && pts.length>=3) h+=`<text class="mlabel" x="${pts[0][0]}" y="${pts[0][1]}" dy="${-0.6*fs}" font-size="${fs*0.9}" stroke-width="${3/z}">${Math.round(sf(polyArea(pts))*10)/10} SF</text>`;
+  }
+  if(S.tool==="barrier" && S.barrierStart && hv) h+=`<line class="barrier" style="opacity:.6" x1="${S.barrierStart[0]}" y1="${S.barrierStart[1]}" x2="${hv[0]}" y2="${hv[1]}"/>`;
+  if(S.tool==="aipick") S.aiPicks.forEach((q,i)=>{ const rr=9/S.view.z;
+    h+=`<circle cx="${q[0]}" cy="${q[1]}" r="${rr}" fill="#6A1B9A" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${q[0]}" y="${q[1]+rr*0.4}" text-anchor="middle" font-size="${rr*1.2}" fill="#fff" font-weight="700" style="pointer-events:none">${i+1}</text>`; });
+  if(S.tool==="cal" && S.calPts.length){ const a=S.calPts[0], b=S.calPts[1]||hv; if(b) h+=`<line class="cal" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`; }
+  const v=S.view;
+  ov.innerHTML=`<g transform="translate(${v.x} ${v.y}) scale(${v.z})">${h}</g>`;
+  placePop();
+}
+function renderList(){
+  const ul=$("roomList"); ul.innerHTML="";
+  $("roomsEmpty").hidden=S.rooms.length>0;
+  $("roomsEmpty").textContent = S.W ? "No rooms yet. Press Detect rooms, click inside a room (A), or draw one (D)." : "No rooms yet. Open a plan, then detect rooms.";
+  const inc=S.rooms.filter(r=>r.include).length;
+  $("roomCount").textContent = S.rooms.length ? `${inc} of ${S.rooms.length} included` : "";
+  for(const r of S.rooms){
+    const li=document.createElement("li"); if(r.id===S.activeId) li.className="active";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=r.include; cb.setAttribute("aria-label",`Include ${r.name}`);
+    cb.onchange=()=>{ r.include=cb.checked; renderAll(); };
+    const nm=document.createElement("input"); nm.type="text"; nm.value=r.name; nm.setAttribute("aria-label","Room name");
+    nm.oninput=()=>{ r.name=nm.value; renderOverlay(); };
+    nm.onfocus=()=>{ S.activeId=r.id; renderOverlay(); document.querySelectorAll(".rooms li").forEach(x=>x.classList.remove("active")); li.classList.add("active"); };
+    const a=document.createElement("span"); a.className="sf"; a.textContent=fmtSf(r);
+    const del=document.createElement("button"); del.className="del"; del.textContent="✕"; del.title="Delete room"; del.setAttribute("aria-label",`Delete ${r.name}`);
+    del.onclick=()=>deleteRoom(r.id);
+    li.append(cb,nm,a,del);
+    if(r.check){ const c=document.createElement("div"); c.className="chk"; c.textContent="⚠ "+r.check; li.append(c); }
+    li.addEventListener("dblclick",()=>zoomToRoom(r));
+    ul.appendChild(li);
+  }
+  updateNameRow();
+}
+function zoomToRoom(r){
+  const [x0,y0,x1,y1]=bbox(r.pts), v=vp.getBoundingClientRect();
+  const z=Math.min(6,Math.min(v.width/((x1-x0)*1.6),v.height/((y1-y0)*1.6)));
+  S.view={z,x:v.width/2-(x0+x1)/2*z,y:v.height/2-(y0+y1)/2*z}; S.activeId=r.id; applyView(); renderList();
+}
+async function mergeRooms(a,b){
+  // Shift-click: join a touching room into the selected one (a room split by finish lines)
+  if(!S.pxPerFt){ flash("Set the drawing scale first."); return; }
+  const R=S.renderScale;
+  try{
+    const d=await api("/api/merge",{in_per_ft:inPerFt(), polys_pt:[a.pts,b.pts].map(q=>q.map(([x,y])=>[x/R,y/R]))});
+    const before=fmtSf(a);
+    a.pts=d.outline_pt.map(([x,y])=>[x*R,y*R]);
+    a.holes=(a.holes||[]).concat(b.holes||[]).filter(h=>inPoly(h[0][0],h[0][1],a.pts));
+    a.include=true; a.check=null;
+    if(a.openings||b.openings) a.openings=(a.openings||[]).concat(b.openings||[]);   // the server drops any now inside
+    if(!a.layers || !a.layers.length){ a.layers=b.layers; a.finishByPliteq=b.finishByPliteq; }
+    S.rooms=S.rooms.filter(r=>r.id!==b.id); S.activeId=a.id; renderAll();
+    flash(`Joined ${b.name||"the room"} into ${a.name||"this room"}: ${fmtSf(a)} (was ${before}).`, 7000);
+  }catch(err){ flash(err.message, 6000); }
+}
+function deleteRoom(id){ S.rooms=S.rooms.filter(r=>r.id!==id); if(S.activeId===id) S.activeId=null; renderAll(); }
+$("allBtn").onclick=()=>{ S.rooms.forEach(r=>r.include=true); renderAll(); };
+$("noneBtn").onclick=()=>{ S.rooms.forEach(r=>r.include=false); renderAll(); };
+["project","dwg","drawnBy","date"].forEach(k=>$(k).addEventListener("input",()=>{ try{ localStorage.setItem("tk."+k,$(k).value); }catch(e){} updateBuildBtn(); }));
+["project","dwg","drawnBy"].forEach(k=>{ try{ const v=localStorage.getItem("tk."+k); if(v) $(k).value=v; }catch(e){} });
+$("date").value=new Date().toISOString().slice(0,10);
+
+function renderAll(){ renderPop(); renderOverlay(); renderList(); renderSteps(); renderAccess(); renderTakeoff(); }
+function netSf(){ const inc=S.rooms.filter(r=>r.include); return (inc.length&&S.pxPerFt) ? inc.reduce((s,r)=>s+sf(roomArea(r)),0) : null; }
+function buKey(r){ return (r.layers||[]).filter(l=>l.code).map(l=>l.code+(l.bond?":"+l.bond:"")+(l.colour?"|"+l.colour:"")).join("/"); }
+function buColor(r){
+  // each distinct buildup gets its own colour (in the order they appear); rooms without one stay orange
+  const pal=["#E59A0B","#2E9E5B","#8E44AD","#1F78B4","#D0453A","#00838F","#6D4C41"];
+  const k=buKey(r); if(!k) return pal[0];
+  const keys=[...new Set(S.rooms.filter(q=>q.include && buKey(q)).map(buKey))];
+  return pal[Math.max(0,keys.indexOf(k))%pal.length];
+}
+function prod(code){ return S.products.find(p=>p.code===code); }
+function layersDone(r){ return (r.layers||[]).length>0 && r.layers.every(l=>l.code); }
+function incRooms(){ return S.rooms.filter(r=>r.include); }
+function transitionsPayload(){
+  const R=S.renderScale;
+  return {slab:S.slab, recess_mm:S.slab==="partial"?(parseFloat($("recessIn").value)||0):0,
+    no_transitions_date:$("noTrDate").value||null, no_ada_date:$("noAdaDate").value||null,
+    openings:S.slab==="recessed"?[]:S.access.map(x=>({a:[+(x.a[0]/R).toFixed(2),+(x.a[1]/R).toFixed(2)], b:[+(x.b[0]/R).toFixed(2),+(x.b[1]/R).toFixed(2)],
+      type:x.type, sides:x.sides??2, ada_width:x.adaWidth||"full", landing:!!x.landing}))};
+}
+function takeoffParams(){ return {in_per_ft:inPerFt(), manual_notes:[...S.manualOn], transitions:transitionsPayload()}; }
+function distToRing(p,pts){ let best=1e18; for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];
+  const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1, t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2));
+  best=Math.min(best,Math.hypot(a[0]+t*dx-p[0],a[1]+t*dy-p[1])); } return best; }
+function setSlab(mode){
+  S.slab=mode;
+  for(const [id,m] of [["slabRec","recessed"],["slabPart","partial"],["slabNot","raised"]]) $(id).setAttribute("aria-pressed", mode===m);
+  $("accBox").hidden=mode==="recessed"; $("recessRow").hidden=mode!=="partial";
+  $("recessIn").placeholder = "e.g. 25"; renderAll();
+  if(mode!=="recessed" && !S.access.length && S.rooms.some(r=>r.include) && S.pdf) suggestAccess();
+}
+$("slabRec").onclick=()=>setSlab("recessed");
+$("slabPart").onclick=()=>setSlab("partial");
+$("slabNot").onclick=()=>setSlab("raised");
+for(const id of ["recessIn","noTrDate","noAdaDate"]) $(id).onchange=()=>renderAll();
+$("accMark").onclick=()=>setTool("access");
+$("accFind").onclick=()=>suggestAccess();
+async function suggestAccess(){
+  const inc=S.rooms.filter(r=>r.include);
+  if(!inc.length){ flash("Tick the takeoff areas first, then suggest access points."); return; }
+  const R=S.renderScale; busy(true,"Looking for access points…"); await nextFrame();
+  try{
+    const d=await api("/api/access",{plan:S.plan, page:S.pageNum, in_per_ft:inPerFt(),
+      rooms:inc.map(r=>({name:r.name, outline_pt:r.pts.map(p=>[p[0]/R,p[1]/R]), openings_pt:r.openings||null}))});
+    // keep access points marked by hand; replace earlier suggestions
+    S.access=S.access.filter(x=>!x.suggested).concat(d.access.map(x=>({a:[x.a[0]*R,x.a[1]*R], b:[x.b[0]*R,x.b[1]*R], type:"std", sides:2, landing:false, room:x.room, suggested:true})));
+    if(S.access.length && !S.access.some(x=>x.type==="ada")){   // the widest opening is the likely main entrance
+      S.access.reduce((m,x)=>lenFt(x.a,x.b)>lenFt(m.a,m.b)?x:m).type="ada"; }
+    busy(false); renderAll();
+    flash(d.access.length ? `Found ${d.access.length} opening${d.access.length>1?"s":""}${d.from_ai?` (${d.from_ai} marked by Claude while tracing)`:" with no wall"}. Check each one: delete false ones, add missed doors and edges where two buildups meet with Mark one (T), and set Standard or ADA.` : "No openings found automatically. Mark them with Mark one (T).", 10000);
+  }catch(err){ busy(false); flash(err.message,8000); }
+}
+function renderAccess(){
+  const ul=$("accList"); if(!ul) return; ul.innerHTML="";
+  S.access.forEach((x,i)=>{
+    const info=S.rampInfo.find(r=>r.index===i);
+    const li=document.createElement("li");
+    const ln=document.createElement("span"); ln.className="ln"; ln.style.background=x.type==="ada"?"#D0453A":"#00838F";
+    const t=document.createElement("span");
+    const what=info ? ` · ${info.n_ada>1?info.n_ada+" ADA pieces, ":""}${info.tiers>1?info.tiers+"x ":""}${info.series}${info.blocking?" on blocking":""}, ${info.height_mm} mm${info.other?" (to "+info.other+")":""}` : "";
+    const len=document.createElement("input"); len.className="lenIn"; len.value=fmtLen(lenFt(x.a,x.b)); len.title="Length: type e.g. 42\" or 3'6 and press Enter";
+    len.onchange=()=>{ const ft=parseFeet(len.value.replace(/′/g,"'").replace(/″/g,'"')); if(ft>0) setAccLen(x,ft); else { flash("Enter a length like 42\" or 3'6."); len.value=fmtLen(lenFt(x.a,x.b)); } };
+    len.onkeydown=e=>{ if(e.key==="Enter") len.blur(); };
+    t.textContent=`${i+1}. ${info?info.room:(x.room||"")}${what}`;
+    t.style.cursor="pointer"; t.title="Show on the plan";
+    t.onclick=()=>{ const v=vp.getBoundingClientRect(), z=Math.min(6,Math.max(S.view.z,2)); S.view={z,x:v.width/2-(x.a[0]+x.b[0])/2*z,y:v.height/2-(x.a[1]+x.b[1])/2*z}; applyView(); };
+    const sel=document.createElement("select"); sel.innerHTML='<option value="std">Standard</option><option value="ada">ADA ramp</option>';
+    sel.value=x.type; sel.onchange=()=>{ pushHist(); x.type=sel.value; renderAll(); };
+    const del=document.createElement("button"); del.className="del"; del.textContent="✕"; del.title="Remove";
+    del.onclick=()=>{ pushHist(); S.access.splice(i,1); S.sel=null; renderAll(); };
+    const opt=document.createElement("div"); opt.className="opt";
+    if(x.type==="ada"){
+      const aw=document.createElement("select");
+      aw.innerHTML='<option value="full">ADA across the whole opening</option><option value="one">One ADA ramp + standard wings</option>';
+      aw.value=x.adaWidth||"full"; aw.onchange=()=>{ x.adaWidth=aw.value; renderAll(); }; opt.append(aw);
+      const sd=document.createElement("select");
+      sd.innerHTML='<option value="2">ADA centred (wings both sides)</option><option value="1">ADA flush to one wall</option><option value="0">ADA between walls (no side wings)</option>';
+      sd.value=String(x.sides??2); sd.onchange=()=>{ x.sides=+sd.value; renderAll(); }; opt.append(sd);
+    }
+    const lb=document.createElement("label"), cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!x.landing;
+    cb.onchange=()=>{ x.landing=cb.checked; renderAll(); }; lb.append(cb, "Door swings in (FIT08 landing)"); opt.append(lb);
+    li.append(ln,len,t,sel,del,opt); ul.appendChild(li);
+  });
+  const n=S.rampInfo.length;
+  $("accSum").textContent = S.access.length ? `${S.access.length} opening${S.access.length>1?"s":""}${n!==S.access.length?` · ${n} with a ramp`:""}. Ramp LF is in the BOM below.` : "No openings yet.";
+  $("accWarn").textContent = S.slab!=="recessed" && S.rooms.some(r=>r.include) && !$("noAdaDate").value && !$("noTrDate").value && !S.access.some(x=>x.type==="ada") ? "⚠ At least one opening needs to be an ADA ramp." : "";
+}
+S.lastLines=null; let tkTimer=null, tkSeq=0;
+function renderTakeoff(){
+  updateBuildBtn();
+  const tb=$("tblock"), ready=incRooms().filter(layersDone), all=incRooms();
+  if(!ready.length || !S.pxPerFt){
+    S.lastLines=null; $("tnotes").innerHTML=""; $("twarn").innerHTML="";
+    tb.className="tblock empty-t"; tb.textContent = !S.pxPerFt ? "Set the drawing scale to get square footage." : "Finish the buildups to see the BOM.";
+    return;
+  }
+  clearTimeout(tkTimer);
+  tkTimer=setTimeout(async()=>{
+    const seq=++tkSeq;
+    try{
+      const d=await api("/api/takeoff",{...takeoffParams(), rooms:roomsPayload().filter((r,i)=>r.included && r.layers.length && r.layers.every(l=>l.code))});
+      if(seq!==tkSeq) return;
+      S.lastLines=d.lines; S.rampInfo=d.ramps||[]; renderAccess();
+      const left=all.length-ready.length;
+      tb.className="tblock"; tb.innerHTML=d.lines.map(l=>`<span class="l">${esc(l)}</span>`).join("")+
+        `<span class="l" style="font-family:Archivo,sans-serif;font-size:12.5px;color:var(--muted);margin-top:4px">${ready.length} room${ready.length===1?"":"s"}, ${Math.round(d.net_sf).toLocaleString()} SF net${left?` · ${left} still need a buildup`:""}</span>`;
+      $("tnotes").innerHTML=d.notes.map(x=>`<li>${esc(x)}</li>`).join("");
+      $("twarn").innerHTML=(d.warnings||[]).map(x=>`<li>⚠ ${esc(x)}</li>`).join("");
+      $("sumSheet").textContent=d.lines.length?d.lines[0]:"";
+    }catch(err){ if(seq===tkSeq){ tb.className="tblock empty-t err"; tb.textContent=err.message; } }
+  },150);
+}
+function updateBuildBtn(){
+  const inc=incRooms();
+  const ok=inc.length && inc.every(layersDone) && S.pxPerFt;
+  $("buildBtn").disabled=!ok;
+  $("exportPng").disabled=!S.rooms.length; $("exportJson").disabled=!S.rooms.length;
+}
+function roomsPayload(){
+  const R=S.renderScale;
+  return S.rooms.map(r=>({name:r.name, number:r.number||null, included:!!r.include,
+    outline_pt:r.pts.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)]),
+    holes_pt:(r.holes||[]).map(h=>h.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)])),
+    layers:(r.layers||[]).map(l=>({code:l.code, ...(l.bond?{bond:l.bond}:{}), ...(l.colour?{colour:l.colour}:{})})), finish_adhesive_by_pliteq:!!r.finishByPliteq}));
+}
+$("buildBtn").onclick=async()=>{
+  if(!$("project").value.trim()){ $("project").focus(); flash("Enter a project name for the title block."); return; }
+  const R=S.renderScale, v=$("scaleSel").value;
+  busy(true,"Building takeoff sheet…"); await nextFrame();
+  try{
+    const d=await api("/api/build",{manual_notes:[...S.manualOn], transitions:transitionsPayload(), plan:S.plan, page:S.pageNum,
+      scale:{label: v==="cal" ? "calibrated" : $("scaleSel").selectedOptions[0].textContent, in_per_ft:inPerFt()},
+      barriers_pt:S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]]),
+      rooms:roomsPayload(),
+      project:$("project").value, dwg:$("dwg").value, drawn_by:$("drawnBy").value, date:$("date").value});
+    const job=d.folder.split(/[\\/]/).pop();
+    $("results").innerHTML=`<div class="results"><p class="ok">Takeoff sheet built</p>
+      ${d.lines.map(l=>`<div>${esc(l)}</div>`).join("")}
+      <div class="links"><a class="btn primary" href="${d.pdf}" target="_blank" rel="noopener">Open PDF</a>
+      <a class="btn" href="${d.csv}" download>BOM CSV</a>
+      <button class="btn" id="revealBtn">Show folder</button></div>
+      <p class="path">Saved in ${esc(d.folder)}</p></div>`;
+    $("revealBtn").onclick=()=>api("/api/reveal",{job}).catch(e=>flash(e.message));
+    window.open(d.pdf,"_blank");
+  }catch(err){ $("results").innerHTML=`<div class="results err">${esc(err.message)}</div>`; }
+  busy(false);
+};
+(async()=>{ try{ const d=await api("/api/catalog");
+  S.products=d.products; S.manualNotes=d.manual_notes; renderManualNotes(); renderAll(); }catch(err){ flash(err.message, 8000); } })();
+function renderManualNotes(){
+  $("mnotes").innerHTML="";
+  for(const n of S.manualNotes){
+    const li=document.createElement("li");
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=S.manualOn.has(n.id);
+    cb.onchange=()=>{ cb.checked?S.manualOn.add(n.id):S.manualOn.delete(n.id); renderTakeoff(); };
+    const t=document.createElement("label"); t.innerHTML=`${esc(n.text)}<span class="w">Use when: ${esc(n.when)}</span>`;
+    t.onclick=()=>{ cb.click(); };
+    li.append(cb,t); $("mnotes").appendChild(li);
+  }
+}
+
+/* ---------- steps: rooms -> buildups (one room at a time) -> sheet ---------- */
+function gotoStep(step){
+  S.step=step;
+  if(step==="buildup"){ const r=incRooms()[S.buIndex]; if(r){ S.activeId=r.id; zoomToRoom(r); } }
+  if(step==="sheet"){ S.activeId=null; fit(); }
+  if(step==="rooms") S.activeId=null;
+  setTool("select"); renderAll();
+  const body={rooms:"bodyRooms",buildup:"bodyBuild",sheet:"bodySheet"}[step];
+  setTimeout(()=>{ const el=$(body); if(el) el.parentElement.scrollIntoView({block:"start",behavior:"smooth"}); },30);
+}
+$("barRooms").onclick=()=>{ if(S.step!=="rooms") gotoStep("rooms"); };
+$("barBuild").onclick=()=>{ if(S.step!=="buildup" && S.finalized) gotoStep("buildup"); };
+$("barSheet").onclick=()=>{ if(S.step!=="sheet") gotoStep("sheet"); };
+$("finalizeBtn").onclick=()=>{
+  const inc=incRooms(); if(!inc.length) return;
+  if(!S.pxPerFt){ flash("Set the drawing scale first (top bar)."); return; }
+  S.finalized=true;
+  const first=inc.findIndex(r=>!layersDone(r));
+  S.buIndex = first<0 ? 0 : first;
+  gotoStep(first<0 ? "sheet" : "buildup");
+};
+function renderSteps(){
+  const inc=incRooms(), sf=inc.reduce((s,r)=>s+(sf2(r)||0),0), done=inc.filter(layersDone).length;
+  const set=(id,open,isDone,hidden)=>{ const el=$(id); el.hidden=!!hidden; el.classList.toggle("open",open); el.classList.toggle("done",!!isDone&&!open); };
+  set("stepRooms", S.step==="rooms", S.finalized);
+  set("stepBuild", S.step==="buildup", inc.length && done===inc.length, !S.finalized);
+  set("stepSheet", S.step==="sheet", false, !S.finalized || !(inc.length && done===inc.length));
+  $("sumRooms").textContent = inc.length ? `${inc.length} selected · ${Math.round(sf).toLocaleString()} SF` : "";
+  $("sumBuild").textContent = inc.length ? `${done} of ${inc.length} rooms done` : "";
+  $("finalizeBtn").disabled=!inc.length;
+  $("finalizeBtn").textContent = S.finalized ? "Update Room Selections" : "Finalize Room Selections";
+  if(S.step==="buildup") renderBuild();
+}
+function sf2(r){ return S.pxPerFt ? sf(roomArea(r)) : null; }
+function heightText(r){
+  let mm=0, unknown=false; for(const l of r.layers||[]){ const p=prod(l.code); if(!p) continue; if(p.thickness_mm==null) unknown=true; else mm+=p.thickness_mm; }
+  if(!mm) return ""; const inch=mm/25.4;
+  return `Total height ${Math.round(mm*10)/10} mm (${Math.round(inch*8)/8}″)${unknown?" + layers without a thickness":""}`;
+}
+function layerSummary(r){
+  const ls=(r.layers||[]).filter(l=>l.code).map(l=>(prod(l.code)||{display:l.code}).display.replace(/^GenieMat /,"")+(l.colour?` (Colour ${l.colour})`:""));
+  return ls.length ? ls.join(" over ") : "needs a buildup";
+}
+function productSelect(value){
+  const sel=document.createElement("select"); sel.setAttribute("aria-label","Product");
+  let h='<option value="">Choose a product…</option>', g=null;
+  for(const p of S.products){
+    if(p.group!==g){ if(g!==null) h+='</optgroup>'; g=p.group; h+=`<optgroup label="${esc(g)}">`; }
+    const th=p.thickness_mm!=null?` · ${p.thickness_mm} mm`:"";
+    h+=`<option value="${esc(p.code)}">${esc(p.display)}${th}</option>`;
+  }
+  sel.innerHTML=h+(g!==null?'</optgroup>':''); sel.value=value||""; return sel;
+}
+function renderBuild(){
+  const box=$("buildRooms"); box.innerHTML="";
+  const inc=incRooms(); if(S.buIndex>=inc.length) S.buIndex=Math.max(0,inc.length-1);
+  inc.forEach((r,i)=>{
+    if(i!==S.buIndex){
+      const b=document.createElement("button"); b.className="rbar";
+      b.innerHTML=`<span class="${layersDone(r)?"ok":"todo"}">${layersDone(r)?"✓":"○"}</span><span class="rn">${esc(r.name)}</span><span class="rs">${esc(layerSummary(r))}</span>`;
+      b.title="Edit this room's buildup";
+      b.onclick=()=>{ S.buIndex=i; S.activeId=r.id; zoomToRoom(r); renderAll(); };
+      box.appendChild(b); return;
+    }
+    // perimeter isolation isn't a layer any more: it's added automatically
+    if(r.layers) r.layers=r.layers.filter(l=>l.code!=="PMI12PF");
+    if(!r.layers || !r.layers.length) r.layers=[{code:""}];
+    const card=document.createElement("div"); card.className="rcard";
+    card.innerHTML=`<h3>${esc(r.name)}</h3><div class="rmeta">Room ${i+1} of ${inc.length} · ${fmtSf(r)}</div>`;
+    // copy from another room
+    const others=inc.filter(q=>q!==r && layersDone(q));
+    if(others.length){
+      const row=document.createElement("div"); row.className="copyrow";
+      const sel=document.createElement("select");
+      sel.innerHTML='<option value="">Same buildup as…</option>'+others.map(q=>`<option value="${q.id}">${esc(q.name)} (${esc(layerSummary(q))})</option>`).join("");
+      sel.onchange=()=>{ const q=others.find(x=>String(x.id)===sel.value); if(q){ r.layers=q.layers.map(l=>({...l})); r.finishByPliteq=q.finishByPliteq; renderAll(); } };
+      row.append("Copy:", sel); card.appendChild(row);
+    }
+    const lab=document.createElement("div"); lab.style.cssText="font-size:13px;font-weight:600;margin-bottom:6px"; lab.textContent="Buildup";
+    card.appendChild(lab);
+    const stack=document.createElement("div"); stack.className="stack";
+    stack.innerHTML='<div class="end">Top · walking surface</div>';
+    r.layers.forEach((l,k)=>{
+      const row=document.createElement("div"); row.className="layer";
+      const num=document.createElement("span"); num.className="lnum"; num.textContent=k+1;
+      num.title = k===0 ? "Top layer" : (k===r.layers.length-1 ? "Bottom layer (on the slab)" : `Layer ${k+1}`);
+      const sel=productSelect(l.code); sel.onchange=()=>{ l.code=sel.value; delete l.bond; renderAll(); };
+      const p=prod(l.code);
+      const bond=document.createElement("select"); bond.className="bond"; bond.title="How this layer attaches to the layer below";
+      bond.innerHTML='<option value="glued">glued</option><option value="loose">loose</option>';
+      bond.value=l.bond||(p?p.bond:"glued"); bond.disabled=!p || p.unit==="lf_roll";
+      bond.onchange=()=>{ if(p && bond.value===p.bond) delete l.bond; else l.bond=bond.value; renderAll(); };
+      // colour: FIT70 Colour A / B... are ordered as separate BOM lines, each with its own overage
+      const colour=document.createElement("select"); colour.className="bond"; colour.title="Colour (each colour is its own BOM line)";
+      colour.innerHTML='<option value="">no colour</option>'+["A","B","C","D","E"].map(c=>`<option value="${c}">Colour ${c}</option>`).join("");
+      colour.value=l.colour||""; colour.disabled=!p || p.in_bom===false || p.unit==="lf_roll";
+      colour.onchange=()=>{ if(colour.value) l.colour=colour.value; else delete l.colour; renderAll(); };
+      const btns=document.createElement("span"); btns.className="lbtns";
+      const mk=(t,title,fn,dis)=>{ const b=document.createElement("button"); b.textContent=t; b.title=title; b.disabled=!!dis; b.onclick=fn; return b; };
+      btns.append(
+        mk("↑","Move up",()=>{ [r.layers[k-1],r.layers[k]]=[r.layers[k],r.layers[k-1]]; renderAll(); }, k===0),
+        mk("↓","Move down",()=>{ [r.layers[k+1],r.layers[k]]=[r.layers[k],r.layers[k+1]]; renderAll(); }, k===r.layers.length-1),
+        mk("✕","Remove layer",()=>{ r.layers.splice(k,1); if(!r.layers.length) r.layers=[{code:""}]; renderAll(); }));
+      const sub=document.createElement("div"); sub.className="lsub";
+      const info=document.createElement("span");
+      info.textContent = !p ? "" : p.components ? p.components.map(c=>(prod(c)||{display:c}).display.replace("GenieMat ","")).join(" on ")
+        : (p.unit_size ? `${p.unit_size} ${p.unit==="lf_roll"?"LF":"SF"} per ${p.unit==="lf_roll"?"roll":p.unit}` : "not supplied by Pliteq");
+      const sp=document.createElement("span"); sp.className="sp";
+      sub.append(bond, colour, info, sp, btns);
+      row.append(num, sel, sub); stack.appendChild(row);
+    });
+    const add=document.createElement("button"); add.className="addlayer"; add.textContent="+ Add layer below";
+    add.onclick=()=>{ r.layers.push({code:""}); renderAll(); };
+    stack.appendChild(add);
+    const slab=document.createElement("div"); slab.className="end slab"; slab.textContent="Slab";
+    stack.appendChild(slab);
+    card.appendChild(stack);
+    const fams=r.layers.map(l=>prod(l.code)).filter(Boolean);
+    const pmi = fams.some(p=>p.family==="plywood" || ["FF70","FF70LDM","FF70-LF"].includes(p.code))
+             || fams.some((p,k)=>p.family==="concrete" && fams.slice(k+1).some(q=>q.family==="ff"));
+    if(pmi){ const h=document.createElement("div"); h.className="height";
+      h.textContent="+ GenieMat PMI12PF around the room's perimeter, added automatically"; card.appendChild(h); }
+    const ht=heightText(r); if(ht){ const h=document.createElement("div"); h.className="height"; h.textContent=ht; card.appendChild(h); }
+    if(r.layers.some(l=>{ const p=prod(l.code); return p && p.family==="finished_floor"; })){
+      const lbl=document.createElement("label"); lbl.style.cssText="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px";
+      const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!r.finishByPliteq; cb.onchange=()=>{ r.finishByPliteq=cb.checked; renderTakeoff(); };
+      lbl.append(cb,"Pliteq supplies the finished floor adhesive"); card.appendChild(lbl);
+    }
+    const foot=document.createElement("div"); foot.className="rfoot";
+    if(i>0){ const back=document.createElement("button"); back.className="btn"; back.textContent="← Previous";
+      back.onclick=()=>{ S.buIndex=i-1; const q=inc[i-1]; S.activeId=q.id; zoomToRoom(q); renderAll(); }; foot.appendChild(back); }
+    const sp=document.createElement("span"); sp.className="sp"; foot.appendChild(sp);
+    const next=document.createElement("button"); next.className="btn primary";
+    const last=i===inc.length-1;
+    next.textContent= last ? "Done → Sheet" : "Next Room →";
+    next.disabled=!layersDone(r);
+    next.title = layersDone(r) ? "" : "Choose a product for every layer first";
+    next.onclick=()=>{
+      if(!last){ S.buIndex=i+1; const q=inc[i+1]; S.activeId=q.id; zoomToRoom(q); renderAll(); return; }
+      const todo=inc.findIndex(q=>!layersDone(q));
+      if(todo>=0){ S.buIndex=todo; flash(`${inc[todo].name} still needs a buildup.`); renderAll(); return; }
+      gotoStep("sheet");
+    };
+    foot.appendChild(next); card.appendChild(foot);
+    box.appendChild(card);
+  });
+}
+loadRecent();
+
+/* ---------- exports ---------- */
+async function saveFile(filename, blobOrString){
+  const blob = blobOrString instanceof Blob ? blobOrString : new Blob([blobOrString],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+$("exportPng").onclick=async()=>{
+  const inc=S.rooms.filter(r=>r.include), show=inc.length?inc:S.rooms;
+  let [x0,y0,x1,y1]=bbox(show.flatMap(r=>r.pts));
+  const m=60; x0=Math.max(0,Math.floor(x0-m)); y0=Math.max(0,Math.floor(y0-m)); x1=Math.min(S.W,Math.ceil(x1+m)); y1=Math.min(S.H,Math.ceil(y1+m));
+  const lines=S.lastLines||[`${S.fileName} — room outlines`];
+  const fs=Math.max(18,Math.round((x1-x0)/70)), head=Math.round(fs*1.5*lines.length+fs*1.4);
+  const c=document.createElement("canvas"); c.width=x1-x0; c.height=y1-y0+head; const g=c.getContext("2d");
+  g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height);
+  g.drawImage(canvas,x0,y0,x1-x0,y1-y0,0,head,x1-x0,y1-y0);
+  g.fillStyle="rgba(255,255,255,.45)"; g.fillRect(0,head,c.width,c.height-head);
+  g.save(); g.translate(-x0,head-y0);
+  for(const r of show){
+    g.beginPath(); r.pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); g.closePath();
+    g.fillStyle = r.include ? "rgba(229,154,11,.22)" : "rgba(47,108,143,.08)"; g.fill();
+    g.lineWidth = r.include ? Math.max(2,fs/7) : 1.5; g.strokeStyle = r.include ? "#1C2326" : "#2F6C8F";
+    g.setLineDash(r.include?[]:[8,5]); g.stroke(); g.setLineDash([]);
+  }
+  g.font=`600 ${Math.round(fs*0.8)}px Archivo, Arial, sans-serif`; g.textAlign="center"; g.lineJoin="round";
+  for(const r of show){ const [x,y]=labelPoint(r.pts);
+    g.lineWidth=4; g.strokeStyle="#fff"; g.strokeText(r.name,x,y); g.fillStyle="#1C2326"; g.fillText(r.name,x,y);
+    const a=fmtSf(r); g.font=`400 ${Math.round(fs*0.7)}px Archivo, Arial, sans-serif`; g.strokeText(a,x,y+fs*0.9); g.fillText(a,x,y+fs*0.9);
+    g.font=`600 ${Math.round(fs*0.8)}px Archivo, Arial, sans-serif`; }
+  g.restore();
+  g.fillStyle="#1C2326"; g.textAlign="left"; g.font=`400 ${fs}px Georgia, "Times New Roman", serif`;
+  lines.forEach((l,i)=>g.fillText(l, fs*0.8, fs*1.4+i*fs*1.5));
+  const blob=await new Promise(r=>c.toBlob(r,"image/png"));
+  saveFile(`${S.fileName||"plan"} - takeoff outline.png`, blob);
+};
+let importedSource=null;
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    const data=JSON.parse(await f.text());
+    if(!S.plan){ flash("Open the plan PDF first, then load its rooms.json."); return; }
+    if(data.page && data.page!==S.pageNum){ await openPlan(S.plan, data.page, false); busy(false); }
+    const R=S.renderScale;
+    importedSource=data.source||null;
+    if(data.scale && data.scale.pt_per_ft){
+      S.calPxPerFt=data.scale.pt_per_ft*R;
+      const opt=[...$("scaleSel").options].find(o=>Math.abs(parseFloat(o.value)-data.scale.in_per_ft)<1e-6);
+      $("scaleSel").value=opt?opt.value:"cal"; updateScale();
+    }
+    S.rooms=(data.rooms||[]).map(r=>({id:r.id, name:r.name||`Room ${r.id}`, number:r.number||null, include:!!r.included,
+      pts:r.outline_pt.map(p=>[p[0]*R,p[1]*R]), holes:(r.holes_pt||[]).map(h=>h.map(p=>[p[0]*R,p[1]*R])), layers:(r.layers||[]).map(l=>({...l})), finishByPliteq:!!r.finish_adhesive_by_pliteq, source:"auto", comp:null}));
+    S.manualOn=new Set(((data.takeoff||{}).manual_notes)||[]); renderManualNotes();
+    S.finalized=S.rooms.some(r=>r.include); S.buIndex=0; S.step=S.finalized?(S.rooms.filter(r=>r.include).every(layersDone)?"sheet":"buildup"):"rooms";
+    S.barriers=(data.barriers_pt||[]).map(b=>[[b[0][0]*R,b[0][1]*R],[b[1][0]*R,b[1][1]*R]]);
+    const tk=data.takeoff||{}, map={system:"system",overage:"overage",project:"project",dwg:"dwg",drawn_by:"drawnBy",date:"date"};
+    for(const [k,id] of Object.entries(map)) if(tk[k]!=null && tk[k]!=="") $(id).value=tk[k];
+    const tr=tk.transitions||{};
+    S.access=(tr.openings||data.access_pt||[]).map(x=>({a:[x.a[0]*R,x.a[1]*R], b:[x.b[0]*R,x.b[1]*R], type:x.type||"std", sides:x.sides??2, adaWidth:x.ada_width||"full", landing:!!x.landing}));
+    $("recessIn").value=tr.recess_mm||(tr.recess_in?Math.round(tr.recess_in*25.4):""); $("noTrDate").value=tr.no_transitions_date||""; $("noAdaDate").value=tr.no_ada_date||"";
+    setSlab(tr.slab||(S.access.length?"raised":"recessed"));
+    S.nextId=Math.max(0,...S.rooms.map(r=>r.id))+1; S.activeId=null; renderAll();
+    flash(`Loaded ${S.rooms.length} rooms. Click rooms to include them, fix outlines, then save rooms.json.`,7000);
+  }catch(err){ flash("That file isn’t a rooms.json from the pipeline."); }
+};
+$("exportJson").onclick=()=>{
+  const R=S.renderScale, k=S.pxPerFt;
+  const v=$("scaleSel").value;
+  const data={ source: importedSource || S.plan, page:S.pageNum,
+    scale: k ? {label: v==="cal" ? "calibrated" : $("scaleSel").selectedOptions[0].textContent, in_per_ft: k/R/72, pt_per_ft: k/R} : null,
+    barriers_pt: S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]]),
+    rooms: S.rooms.map((r,i)=>({ id:r.id, name:r.name, number:r.number||null, included:r.include,
+      area_sf: k?Math.round(sf(roomArea(r))*10)/10:null,
+      outline_pt: r.pts.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)]),
+      holes_pt: (r.holes||[]).map(h=>h.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)])),
+      layers:(r.layers||[]).filter(l=>l.code), finish_adhesive_by_pliteq:!!r.finishByPliteq })),
+    takeoff:{manual_notes:[...S.manualOn], transitions:transitionsPayload()} };
+  saveFile("rooms.json", JSON.stringify(data,null,2));
+};
+
+
+setParamUI(); renderAll();
+</script>
+</body>
+</html>

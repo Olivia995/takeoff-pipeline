@@ -1,0 +1,130 @@
+# =============================================================================
+# PRODUCT CATALOG
+# =============================================================================
+# Every product a takeoff can use. Edit this file to add products or fix sizes;
+# no code changes needed.
+#
+# Fields
+#   code          Short code used in buildups (e.g. FIT70). Must be unique.
+#   display       Name printed on the drawing (BOM, callouts, notes).
+#   family        Drives the rules. One of:
+#                   xfit, fit_tile, fit_roll, flooring, rst, dh, ff, ff_panel,
+#                   pmi, plywood, finished_floor, other
+#   unit          tile | roll | panel | sheet | lf_roll   (what we count in the BOM)
+#   unit_size     SF per tile/roll/panel, or LF per roll for lf_roll.
+#                 null = not known yet -> the engine stops with a clear error.
+#   thickness_mm  Used for buildup heights and ramp planning.
+#   adhesive      Adhesive class (see adhesives.yaml): fit70, fit30, rolled,
+#                 turf, plank, none, pending (calculator not supplied yet)
+#   bond          glued | loose   How this layer normally attaches to the
+#                 layer below. A buildup can override this per layer.
+#   nbn           true for "No Bond Needed" products (FFxxNBN).
+#   in_bom        false for things Pliteq never supplies (plywood, finished floor).
+#   hatch_pattern CAD hatch pattern name (e.g. DOLMIT, BRICK).
+#   hatch_scale   CAD hatch scale factor (e.g. 32).
+#
+# Items marked TODO need a value from Pliteq.
+# =============================================================================
+
+products:
+
+  # ---- xFIT (above FIT in the BOM, thickest first) -------------------------
+  - {code: xFIT100, display: GenieMat xFIT100, family: xfit, unit: tile, unit_size: 4, thickness_mm: 100, adhesive: pending, bond: glued}  # 4 SF per tile, 100mm tall (confirmed by Pliteq); TODO calculator
+  - {code: xFIT30,  display: GenieMat xFIT30,  family: xfit, unit: tile, unit_size: 4,    thickness_mm: 30,  adhesive: pending, bond: glued}  # TODO calculator
+  - {code: xFIT70,  display: GenieMat xFIT70,  family: xfit, unit: tile, unit_size: 4,    thickness_mm: 70,  adhesive: pending, bond: glued}  # TODO calculator
+
+  # ---- FIT ------------------------------------------------------------------
+  - {code: FIT70, display: GenieMat FIT70, family: fit_tile, unit: tile, unit_size: 4,   thickness_mm: 70, adhesive: fit70,  bond: glued}
+  - {code: FIT30, display: GenieMat FIT30, family: fit_tile, unit: tile, unit_size: 4,   thickness_mm: 30, adhesive: fit30,  bond: glued}
+  - {code: FIT08, display: GenieMat FIT08, family: fit_roll, unit: roll, unit_size: 100, thickness_mm: 8,  adhesive: rolled, bond: glued}
+
+  # ---- Flooring products (directly under FIT in the BOM) -------------------
+  # TODO: unit sizes, and which VersaDUEL thicknesses are rolls vs tiles.
+  - {code: VersaDUEL08, display: VersaDUEL08, family: flooring, unit: roll, unit_size: 60,   thickness_mm: 8,  adhesive: pending, bond: glued}
+  - {code: VersaDUEL09, display: VersaDUEL09, family: flooring, unit: roll, unit_size: 60,   thickness_mm: 9,  adhesive: pending, bond: glued}
+  - {code: VersaDUEL12, display: VersaDUEL12, family: flooring, unit: roll, unit_size: 60,   thickness_mm: 12, adhesive: pending, bond: glued}
+  - {code: VersaDUEL15, display: VersaDUEL15, family: flooring, unit: roll, unit_size: 60,   thickness_mm: 15, adhesive: pending, bond: glued}
+  - {code: VersaDUEL20, display: VersaDUEL20, family: flooring, unit: roll, unit_size: 60,   thickness_mm: 20, adhesive: pending, bond: glued}
+  - {code: VersaDUEL25, display: VersaDUEL25, family: flooring, unit: roll, unit_size: 60,   thickness_mm: 25, adhesive: pending, bond: glued}
+  - {code: VersaDUEL30, display: VersaDUEL30, family: flooring, unit: tile, unit_size: 4,    thickness_mm: 30, adhesive: pending, bond: glued}
+  - {code: VersaDUEL50, display: VersaDUEL50, family: flooring, unit: tile, unit_size: 4,    thickness_mm: 50, adhesive: pending, bond: glued}
+  - {code: VersaDUEL70, display: VersaDUEL70, family: flooring, unit: tile, unit_size: 4,    thickness_mm: 70, adhesive: pending, bond: glued}
+  - {code: VersaTURF,   display: VersaTURF,   family: flooring, unit: roll, unit_size: null, thickness_mm: 10, adhesive: turf,    bond: glued}  # 10mm confirmed by Pliteq; TODO roll size
+  - {code: VersaRUBBER10, display: VersaRUBBER10, family: flooring, unit: sheet, unit_size: 24, thickness_mm: 10, adhesive: pending, bond: glued}
+  - {code: VersaRUBBER12, display: VersaRUBBER12, family: flooring, unit: sheet, unit_size: 24, thickness_mm: 12, adhesive: pending, bond: glued}
+  - {code: VersaRUBBERELITE3, display: VersaRUBBER ELITE3, family: flooring, unit: tile, unit_size: 3.2, thickness_mm: 3, adhesive: plank, bond: glued, hatch_pattern: BRICK}  # Planks at 3.2 SF per tile, hatch BRICK
+  - {code: VersaRUBBERELITE6, display: VersaRUBBER ELITE6, family: flooring, unit: tile, unit_size: 3.2, thickness_mm: 6, adhesive: plank, bond: glued, hatch_pattern: BRICK}  # Planks at 3.2 SF per tile, hatch BRICK
+  - {code: VersaRUBBERELITE9, display: VersaRUBBER ELITE9, family: flooring, unit: tile, unit_size: 3.2, thickness_mm: 9, adhesive: plank, bond: glued, hatch_pattern: BRICK}  # Planks at 3.2 SF per tile, hatch BRICK
+  - {code: VersaTREAD02, display: VersaTREAD02, family: flooring, unit: roll, unit_size: 100, thickness_mm: 2,  adhesive: pending, bond: glued}
+  - {code: VersaTREAD06, display: VersaTREAD06, family: flooring, unit: roll, unit_size: 100, thickness_mm: 6,  adhesive: pending, bond: glued}
+  - {code: VersaTREAD08, display: VersaTREAD08, family: flooring, unit: roll, unit_size: 100, thickness_mm: 8,  adhesive: pending, bond: glued}
+  - {code: VersaTREAD09, display: VersaTREAD09, family: flooring, unit: roll, unit_size: 100, thickness_mm: 9,  adhesive: pending, bond: glued}
+  - {code: VersaTREAD10, display: VersaTREAD10, family: flooring, unit: roll, unit_size: 100, thickness_mm: 10, adhesive: pending, bond: glued}
+  - {code: VersaTREAD12, display: VersaTREAD12, family: flooring, unit: roll, unit_size: 100, thickness_mm: 12, adhesive: pending, bond: glued}
+  - {code: Envy, display: GenieMat Envy, family: flooring, unit: roll, unit_size: null, thickness_mm: 5.5, adhesive: plank, bond: glued, hatch_pattern: DOLMIT, hatch_scale: 32}  # 5.5mm & DOLMIT scale 32 confirmed by Pliteq; TODO roll size; FAS3 per PeakForce note
+  - {code: PeakForce, display: GenieMat PeakForce, family: flooring, unit: tile, unit_size: null, thickness_mm: 45.5, adhesive: pending, bond: glued, hatch_pattern: DOLMIT, hatch_scale: 32}  # Buildup: FIT30-C1 (30mm) + RST10 (10mm) + ENVY (5.5mm) = 45.5mm
+  - {code: PeakForceELITE, display: GenieMat PeakForce ELITE, family: flooring, unit: tile, unit_size: null, thickness_mm: 85.5, adhesive: pending, bond: glued, hatch_pattern: DOLMIT, hatch_scale: 32}  # Buildup: FIT70-C1 (70mm) + RST10 (10mm) + ENVY (5.5mm) = 85.5mm
+
+  # ---- RST / DH interstitial layers ----------------------------------------
+  - {code: RST02,    display: GenieMat RST02,    family: rst, unit: roll, unit_size: null, thickness_mm: 2,  adhesive: rolled, bond: glued}  # TODO size
+  - {code: RST02PS,  display: GenieMat RST02 PS, family: rst, unit: roll, unit_size: null, thickness_mm: 2,  adhesive: rolled, bond: glued}  # TODO size
+  - {code: RST03,    display: GenieMat RST03,    family: rst, unit: roll, unit_size: null, thickness_mm: 3,  adhesive: rolled, bond: glued}  # TODO size
+  - {code: RST03PS,  display: GenieMat RST03 PS, family: rst, unit: roll, unit_size: null, thickness_mm: 3,  adhesive: rolled, bond: glued}  # TODO size
+  - {code: RST03PRO, display: GenieMat RST03 PRO, family: rst, unit: roll, unit_size: null, thickness_mm: 3, adhesive: rolled, bond: glued}  # Confirmed: RST PRO same as base (size pending)
+  - {code: RST05,    display: GenieMat RST05,    family: rst, unit: roll, unit_size: 120, thickness_mm: 5,  adhesive: rolled, bond: glued}
+  - {code: RST05PS,  display: GenieMat RST05 PS, family: rst, unit: roll, unit_size: 120, thickness_mm: 5,  adhesive: rolled, bond: glued}  # Confirmed: same as base
+  - {code: RST05PRO, display: GenieMat RST05 PRO, family: rst, unit: roll, unit_size: 120, thickness_mm: 5, adhesive: rolled, bond: glued}  # Confirmed: RST PRO same as base
+  - {code: RST10,    display: GenieMat RST10,    family: rst, unit: roll, unit_size: 60,   thickness_mm: 10, adhesive: rolled, bond: glued}
+  - {code: RST10PRO, display: GenieMat RST10 PRO, family: rst, unit: roll, unit_size: 60, thickness_mm: 10, adhesive: rolled, bond: glued}  # Confirmed: RST PRO same as base
+  - {code: RST12,    display: GenieMat RST12,    family: rst, unit: roll, unit_size: 50, thickness_mm: 12, adhesive: rolled, bond: glued}
+  - {code: RST12PRO, display: GenieMat RST12 PRO, family: rst, unit: roll, unit_size: 50, thickness_mm: 12, adhesive: rolled, bond: glued}  # Confirmed: RST PRO same as base
+  - {code: RST15,    display: GenieMat RST15,    family: rst, unit: sheet, unit_size: 10, thickness_mm: 15, adhesive: rolled, bond: glued}
+  # DH series: per Pliteq, DH series products are not typically taken off
+  - {code: DH755,    display: GenieMat DH755,    family: dh,  unit: roll, unit_size: null, thickness_mm: 3,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: DH760,    display: GenieMat DH760,    family: dh,  unit: roll, unit_size: null, thickness_mm: 7,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: DH765,    display: GenieMat DH765,    family: dh,  unit: roll, unit_size: null, thickness_mm: 11, adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: DH755PRO, display: GenieMat DH755 PRO, family: dh, unit: roll, unit_size: null, thickness_mm: 3,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: DH760PRO, display: GenieMat DH760 PRO, family: dh, unit: roll, unit_size: null, thickness_mm: 7,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: DH765PRO, display: GenieMat DH765 PRO, family: dh, unit: roll, unit_size: null, thickness_mm: 11, adhesive: rolled, bond: glued}  # Rarely taken off
+
+  # ---- FF (rolled) -----------------------------------------------------------
+  # Note: per Pliteq, FF03/06/17/31/42/100 and FFNC32/75 are not typically taken off
+  - {code: FF03,  display: GenieMat FF03,  family: ff, unit: roll, unit_size: null, thickness_mm: 3,   adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FF06,  display: GenieMat FF06,  family: ff, unit: roll, unit_size: null, thickness_mm: 6,   adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FF10,  display: GenieMat FF10,  family: ff, unit: roll, unit_size: 120, thickness_mm: 10,  adhesive: rolled, bond: glued}
+  - {code: FF17,  display: GenieMat FF17,  family: ff, unit: roll, unit_size: null, thickness_mm: 17,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FF25,  display: GenieMat FF25,  family: ff, unit: roll, unit_size: 60,   thickness_mm: 25,  adhesive: rolled, bond: glued}
+  - {code: FF31,  display: GenieMat FF31,  family: ff, unit: roll, unit_size: null, thickness_mm: 31,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FF42,  display: GenieMat FF42,  family: ff, unit: roll, unit_size: null, thickness_mm: 42,  adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FF50,  display: GenieMat FF50,  family: ff, unit: roll, unit_size: 30,   thickness_mm: 50,  adhesive: rolled, bond: glued}
+  - {code: FF75,  display: GenieMat FF75,  family: ff, unit: roll, unit_size: 20, thickness_mm: 75,  adhesive: rolled, bond: glued}
+  - {code: FF100, display: GenieMat FF100, family: ff, unit: roll, unit_size: null, thickness_mm: 100, adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FFNC10, display: GenieMat FFNC10, family: ff, unit: roll, unit_size: 60,   thickness_mm: 10, adhesive: rolled, bond: glued}
+  - {code: FFNC17, display: GenieMat FFNC17, family: ff, unit: roll, unit_size: 60, thickness_mm: 17, adhesive: rolled, bond: glued}
+  - {code: FFNC25, display: GenieMat FFNC25, family: ff, unit: roll, unit_size: 42,   thickness_mm: 25, adhesive: rolled, bond: glued}
+  - {code: FFNC32, display: GenieMat FFNC32, family: ff, unit: roll, unit_size: null, thickness_mm: 32, adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FFNC50, display: GenieMat FFNC50, family: ff, unit: roll, unit_size: 21,   thickness_mm: 50, adhesive: rolled, bond: glued}
+  - {code: FFNC75, display: GenieMat FFNC75, family: ff, unit: roll, unit_size: null, thickness_mm: 75, adhesive: rolled, bond: glued}  # Rarely taken off
+  - {code: FFNC25NBN, display: GenieMat FFNC25NBN, family: ff, unit: roll, unit_size: 42, thickness_mm: 25, adhesive: rolled, bond: glued, nbn: true}  # TODO confirm same roll as FFNC25
+  - {code: FFNC50NBN, display: GenieMat FFNC50NBN, family: ff, unit: roll, unit_size: 21, thickness_mm: 50, adhesive: rolled, bond: glued, nbn: true}  # TODO confirm
+
+  # ---- FF (panels / modular) ------------------------------------------------
+  # FF70LDM: confirmed 3.754 SF per panel. Treated as loose laid (no adhesive)
+  # because the Visa takeoff (FCM-1) counts none for it.
+  - {code: FF70LDM, display: GenieMat FF70LDM, family: ff_panel, unit: panel, unit_size: 3.754, thickness_mm: 70, adhesive: none, bond: loose}
+  - {code: FF70,    display: GenieMat FF70,    family: ff_panel, unit: tile,  unit_size: 3.754, thickness_mm: 70, adhesive: none, bond: loose}
+  - {code: FF70-LF, display: GenieMat FF70-LF, family: ff_panel, unit: sheet, unit_size: 32,    thickness_mm: 70, adhesive: none, bond: loose}
+  - {code: LDM5-25, display: GenieMat LDM5-25, family: ff_panel, unit: panel, unit_size: null, thickness_mm: null, adhesive: none, bond: loose}  # Per Pliteq: rarely taken off
+
+  # ---- Other ----------------------------------------------------------------
+  - {code: RF13, display: GenieMat RF13, family: other, unit: roll, unit_size: null, thickness_mm: 13, adhesive: rolled, bond: glued}  # Per Pliteq: rarely taken off
+  - {code: RF25, display: GenieMat RF25, family: other, unit: roll, unit_size: null, thickness_mm: 25, adhesive: rolled, bond: glued}  # Per Pliteq: rarely taken off
+
+  # ---- Perimeter isolation (counted in LF) -----------------------------------
+  - {code: PMI12PF, display: GenieMat PMI12PF, family: pmi, unit: lf_roll, unit_size: 50, thickness_mm: 0, adhesive: none, bond: loose}
+
+  # ---- Never in the BOM ------------------------------------------------------
+  # Plywood: nothing is glued under it unless the buildup says so.
+  - {code: PLY, display: '3/4" Plywood', family: plywood, unit: panel, unit_size: null, thickness_mm: 19.05, adhesive: none, bond: loose, in_bom: false}
+  # Finished floor: adhesive is by others unless the takeoff says Pliteq supplies it.
+  - {code: FINISH, display: Finished Floor, family: finished_floor, unit: roll, unit_size: null, thickness_mm: 5, adhesive: rolled, bond: glued, in_bom: false}

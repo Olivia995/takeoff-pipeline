@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Room review – takeoff pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#E9ECEC; --surface:#FFFFFF; --sunk:#F3F5F5; --ink:#1C2326; --muted:#5B676D; --line:#CFD6D8;
+  --accent:#E59A0B; --accent-ink:#3A2600; --accent-wash:rgba(229,154,11,.28);
+  --cand:#2F6C8F; --cand-wash:rgba(47,108,143,.10); --danger:#B3261E; --barrier:#C2185B;
+  --canvas-bg:#D9DEDF;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121618; --surface:#1B2124; --sunk:#161B1D; --ink:#E4EAEC; --muted:#93A0A6; --line:#2E373B;
+    --accent:#F0AE2E; --accent-ink:#2A1B00; --accent-wash:rgba(240,174,46,.30);
+    --cand:#6FAFD3; --cand-wash:rgba(111,175,211,.12); --danger:#F2867D; --barrier:#F06292;
+    --canvas-bg:#0D1011; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121618; --surface:#1B2124; --sunk:#161B1D; --ink:#E4EAEC; --muted:#93A0A6; --line:#2E373B;
+  --accent:#F0AE2E; --accent-ink:#2A1B00; --accent-wash:rgba(240,174,46,.30);
+  --cand:#6FAFD3; --cand-wash:rgba(111,175,211,.12); --danger:#F2867D; --barrier:#F06292;
+  --canvas-bg:#0D1011; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.45;display:flex;flex-direction:column;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* top bar */
+.bar{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:700;font-stretch:80%;font-size:17px;letter-spacing:-.01em;margin-right:6px;white-space:nowrap}
+.brand small{display:block;font-weight:400;font-stretch:100%;font-size:12px;color:var(--muted);letter-spacing:0}
+.bar .grp{display:flex;align-items:center;gap:8px}
+.bar label{color:var(--muted);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--sunk);padding:7px 12px;border-radius:6px;line-height:1.2}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+select,input[type=text],input[type=number]{border:1px solid var(--line);background:var(--sunk);border-radius:6px;padding:6px 8px}
+.scale-state{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.spacer{flex:1}
+
+/* work area */
+.work{flex:1;display:grid;grid-template-columns:56px 1fr 340px;min-height:0}
+.tools{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px}
+.tool{width:40px;height:40px;border-radius:8px;border:1px solid transparent;background:none;display:grid;place-items:center;position:relative}
+.tool svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tool:hover{background:var(--sunk)}
+.tool[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool .k{position:absolute;right:3px;bottom:1px;font-size:9px;opacity:.6}
+.tools hr{width:28px;border:0;border-top:1px solid var(--line);margin:6px 0}
+
+.viewport{position:relative;overflow:hidden;background:var(--canvas-bg);touch-action:none;user-select:none;-webkit-user-select:none}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
+#plan{display:block;background:#fff}
+#ov{position:absolute;left:0;top:0;overflow:visible}
+.viewport.t-pan{cursor:grab}.viewport.panning{cursor:grabbing}
+.viewport.t-click,.viewport.t-draw,.viewport.t-barrier,.viewport.t-cal{cursor:crosshair}
+
+.room{fill:var(--cand-wash);stroke:var(--cand);stroke-width:1.5;vector-effect:non-scaling-stroke;stroke-dasharray:5 3}
+.room.inc{fill:var(--accent-wash);stroke:var(--accent);stroke-width:2.5;stroke-dasharray:none}
+.room.active{stroke-width:3.5}
+.rlabel{fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-linejoin:round;font-weight:600;pointer-events:none}
+.rlabel tspan.a{font-weight:400}
+.barrier{stroke:var(--barrier);stroke-width:3;vector-effect:non-scaling-stroke;stroke-linecap:round}
+.draft{fill:none;stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke;stroke-dasharray:6 4}
+.cal{stroke:#1E88E5;stroke-width:2;vector-effect:non-scaling-stroke}
+.handle{fill:var(--surface);stroke:var(--accent);stroke-width:2;vector-effect:non-scaling-stroke}
+
+.empty{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center}
+.empty .drop{max-width:440px;border:2px dashed var(--line);border-radius:14px;padding:36px 28px;background:color-mix(in srgb,var(--surface) 80%,transparent)}
+.empty h1{font-stretch:80%;font-size:26px;line-height:1.15;margin:0 0 8px;letter-spacing:-.01em}
+.empty p{color:var(--muted);margin:0 0 18px}
+.viewport.dragover .drop{border-color:var(--accent)}
+.hint{position:absolute;left:12px;bottom:12px;max-width:min(520px,calc(100% - 24px));background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.hint:empty{display:none}
+.busy{position:absolute;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--canvas-bg) 60%,transparent);font-weight:600}
+.busy.on{display:grid}
+.zoom{position:absolute;right:12px;top:12px;display:flex;gap:4px}
+.zoom button{width:34px;height:34px;border-radius:6px;border:1px solid var(--line);background:var(--surface)}
+
+/* panel */
+.panel{background:var(--surface);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+.sec h2{font-size:15px;font-weight:650;font-stretch:85%;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.sec h2 .n{color:var(--muted);font-weight:400;font-stretch:100%}
+.sec h2 .act{margin-left:auto;display:flex;gap:6px}
+.link{background:none;border:0;padding:0;color:var(--cand);font-size:13px;text-decoration:underline;text-underline-offset:2px}
+details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:10px}
+.field{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-top:10px;font-size:13px}
+.field input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.field output{color:var(--muted);font-variant-numeric:tabular-nums}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+
+.rooms{list-style:none;margin:0;padding:0}
+.rooms li{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:6px 6px;border-radius:6px}
+.rooms li.active{background:var(--sunk);box-shadow:inset 3px 0 0 var(--accent)}
+.rooms input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
+.rooms input[type=text]{border:1px solid transparent;background:none;padding:3px 5px;width:100%;min-width:0}
+.rooms input[type=text]:hover,.rooms input[type=text]:focus{border-color:var(--line);background:var(--sunk)}
+.rooms .sf{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);white-space:nowrap}
+.rooms .del{border:0;background:none;color:var(--muted);width:26px;height:26px;border-radius:5px}
+.rooms .del:hover{color:var(--danger);background:var(--sunk)}
+.rooms-empty{color:var(--muted);font-size:13px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+.grid2 label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted)}
+.grid2 label.full{grid-column:1/-1}
+.grid2 input{width:100%;color:var(--ink)}
+
+/* the title-block readout */
+.tblock{margin-top:14px;border:1.5px solid var(--ink);border-radius:4px;font-family:Georgia,"Times New Roman",serif;font-size:14.5px;line-height:1.5;padding:10px 12px;background:var(--sunk);font-variant-numeric:lining-nums}
+.tblock .l{display:block}
+.tblock.empty-t{font-family:inherit;font-size:13px;color:var(--muted);border-style:dashed;border-color:var(--line)}
+.exports{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:18px;max-width:360px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h3{margin:0 0 6px;font-stretch:85%}
+dialog p{margin:0 0 12px;color:var(--muted);font-size:13px}
+dialog input{width:100%}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+
+@media (max-width:900px){
+  body{overflow:auto}
+  .work{grid-template-columns:1fr;grid-template-rows:auto 62vh auto}
+  .tools{flex-direction:row;justify-content:center;border-right:0;border-bottom:1px solid var(--line);padding:6px;flex-wrap:wrap}
+  .tools hr{width:1px;height:28px;border:0;border-left:1px solid var(--line);margin:0 6px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">Room takeoff outliner<small>Review rooms.json from the pipeline: fix outlines, choose rooms, save</small></div>
+  <div class="grp">
+    <button class="btn primary" id="openBtn">Open plan</button>
+    <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden>
+    <button class="btn" id="importBtn" disabled>Load rooms.json</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+  <div class="grp" id="pageGrp" hidden>
+    <label for="pageSel">Page</label><select id="pageSel"></select>
+  </div>
+  <div class="grp">
+    <label for="scaleSel">Drawing scale</label>
+    <select id="scaleSel">
+      <option value="0.0625">1/16″ = 1′-0″</option>
+      <option value="0.09375">3/32″ = 1′-0″</option>
+      <option value="0.125" selected>1/8″ = 1′-0″</option>
+      <option value="0.1875">3/16″ = 1′-0″</option>
+      <option value="0.25">1/4″ = 1′-0″</option>
+      <option value="0.375">3/8″ = 1′-0″</option>
+      <option value="0.5">1/2″ = 1′-0″</option>
+      <option value="cal">Calibrated</option>
+    </select>
+    <span class="scale-state" id="scaleState"></span>
+  </div>
+  <div class="spacer"></div>
+</header>
+
+<main class="work">
+  <nav class="tools" aria-label="Tools">
+    <button class="tool" data-tool="select" title="Select and include rooms (V)" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg><span class="k">V</span></button>
+    <button class="tool" data-tool="pan" title="Pan (H, or hold Space)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V12M11 11V4a1.5 1.5 0 013 0v7M14 11V5.5a1.5 1.5 0 013 0V14c0 4-2.5 7-6 7s-5-2-6.5-4.5L3 13.5a1.6 1.6 0 012.6-1.8L8 14"/></svg><span class="k">H</span></button>
+    <hr>
+    <button class="tool" data-tool="click" title="Add a room by clicking inside it (A)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 9v6M9 12h6"/></svg><span class="k">A</span></button>
+    <button class="tool" data-tool="draw" title="Draw a room outline (D)"><svg viewBox="0 0 24 24"><path d="M4 19l3-13 9 2 4 9-8 3z"/><circle cx="4" cy="19" r="1.2"/><circle cx="7" cy="6" r="1.2"/><circle cx="16" cy="8" r="1.2"/></svg><span class="k">D</span></button>
+    <button class="tool" data-tool="barrier" title="Close an opening such as a doorway (B)"><svg viewBox="0 0 24 24"><path d="M4 4v16M20 4v16M4 12h16"/></svg><span class="k">B</span></button>
+    <hr>
+    <button class="tool" data-tool="cal" title="Calibrate scale from a known dimension (C)"><svg viewBox="0 0 24 24"><path d="M3 15l12-12 6 6-12 12z"/><path d="M7 11l2 2M10 8l2 2M13 5l2 2"/></svg><span class="k">C</span></button>
+  </nav>
+
+  <section class="viewport t-select" id="vp" aria-label="Plan">
+    <div id="stage"><canvas id="plan" width="10" height="10"></canvas><svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div class="empty" id="empty">
+      <div class="drop">
+        <h1>Drop a floor plan here</h1>
+        <p>PDF or image. Rooms are traced from the wall lines; you choose which ones go into the takeoff.</p>
+        <button class="btn primary" id="openBtn2">Open plan</button>
+      </div>
+    </div>
+    <div class="zoom" id="zoomCtl" hidden>
+      <button id="zIn" title="Zoom in" aria-label="Zoom in">+</button>
+      <button id="zOut" title="Zoom out" aria-label="Zoom out">−</button>
+      <button id="zFit" title="Fit to screen" aria-label="Fit to screen">⤢</button>
+    </div>
+    <div class="hint" id="hint" role="status"></div>
+    <div class="busy" id="busy">Working…</div>
+  </section>
+
+  <aside class="panel">
+    <div class="sec">
+      <h2>Find rooms</h2>
+      <button class="btn primary" id="detectBtn" disabled>Detect rooms</button>
+      <p class="note">Rooms that leak through a doorway won’t be found. Close the opening with the opening tool (B), or click inside the room with the add tool (A).</p>
+      <details>
+        <summary>Detection settings</summary>
+        <div class="field"><span>Wall line darkness</span><output id="thrOut"></output><input type="range" id="thr" min="120" max="245" step="5"></div>
+        <div class="field"><span>Ignore lines thinner than</span><output id="thinOut"></output><input type="range" id="thin" min="0" max="4" step="1"></div>
+        <div class="field"><span>Close openings up to</span><output id="gapOut"></output><input type="range" id="gap" min="0" max="40" step="1"></div>
+        <div class="field"><span>Smallest room</span><output id="minOut"></output><input type="range" id="minSf" min="5" max="300" step="5"></div>
+      </details>
+    </div>
+
+    <div class="sec">
+      <h2>Rooms <span class="n" id="roomCount"></span>
+        <span class="act"><button class="link" id="allBtn">All</button><button class="link" id="noneBtn">None</button></span>
+      </h2>
+      <ul class="rooms" id="roomList"></ul>
+      <p class="rooms-empty" id="roomsEmpty">No rooms yet. Open a plan, then detect rooms.</p>
+      <div class="exports" id="nameRow" hidden><button class="btn" id="nameBtn">Read room names with Claude</button></div>
+    </div>
+
+    <div class="sec">
+      <h2>Takeoff</h2>
+      <div class="grid2">
+        <label class="full">Product<input type="text" id="product" value="GenieMat FIT70"></label>
+        <label>Overage %<input type="number" id="overage" value="9" min="0" step="1"></label>
+        <label>SF per tile<input type="number" id="tileSf" value="4" min="0.1" step="0.1"></label>
+        <label>Adhesive<input type="text" id="adhesive" value="Pliteq FAS1 Adhesive"></label>
+        <label>SF per pail<input type="number" id="pailSf" value="1500" min="1" step="50"></label>
+      </div>
+      <div class="tblock empty-t" id="tblock">Tick rooms to build the takeoff.</div>
+      <div class="exports">
+        <button class="btn primary" id="exportPng" disabled>Export outline (PNG)</button>
+        <button class="btn" id="exportJson" disabled>Save rooms.json</button>
+      </div>
+      <p class="note">Save rooms.json, then run <code>python -m takeoff build rooms.json …</code> to make the sheet. SF per pail here is an editable estimate, not a product spec. Check coverage against the adhesive data sheet.</p>
+    </div>
+  </aside>
+</main>
+
+<dialog id="calDlg">
+  <h3>Set the scale</h3>
+  <p>How long is the line you just drew? Enter feet and inches, like 24′-6″, 24' 6", or 24.5.</p>
+  <input type="text" id="calLen" placeholder="24'-6&quot;" autocomplete="off">
+  <div class="row"><button class="btn" id="calCancel">Cancel</button><button class="btn primary" id="calOk">Set scale</button></div>
+</dialog>
+
+<script>
+"use strict";
+/* ---------- state ---------- */
+const S = {
+  fileName:"", pdf:null, pageNum:1, renderScale:1, isPdf:false,
+  W:0, H:0, ctx:null,
+  pxPerFt:null, calPxPerFt:null,
+  rooms:[], nextId:1, activeId:null,
+  barriers:[],
+  tool:"select",
+  view:{z:1,x:0,y:0},
+  A:null, dirty:true,
+  draft:[], barrierStart:null, calPts:[], hover:null,
+  params:{thr:200, thin:1, gap:17, minSf:30}
+};
+const $ = id => document.getElementById(id);
+const vp=$("vp"), stage=$("stage"), canvas=$("plan"), ov=$("ov");
+S.ctx = canvas.getContext("2d", {willReadFrequently:true});
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* runtime capabilities (optional) */
+let downloadsNs = null, sampleNs = null, sampleImgMax = 0;
+(async () => {
+  if (!window.claude || !claude.use) return;
+  try { downloadsNs = await claude.use("downloads"); } catch(e) {}
+  try {
+    sampleNs = await claude.use("sample");
+    if (sampleNs) {
+      const lim = await sampleNs.limits().catch(()=>null);
+      sampleImgMax = lim && lim.images ? Math.min(lim.images.maxCount || 1, 8) : 0;
+    }
+  } catch(e) { sampleNs = null; }
+  updateNameRow();
+})();
+
+function hint(msg){ $("hint").textContent = msg || ""; }
+let hintTimer=null;
+function flash(msg, ms=4000){ hint(msg); clearTimeout(hintTimer); hintTimer=setTimeout(()=>{ hint(toolHint()); }, ms); }
+function busy(on, msg){ $("busy").textContent = msg || "Working…"; $("busy").classList.toggle("on", !!on); }
+const nextFrame = () => new Promise(r => requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+/* ---------- loading ---------- */
+$("openBtn").onclick = $("openBtn2").onclick = () => $("file").click();
+$("file").onchange = e => { const f=e.target.files[0]; if(f) loadFile(f); e.target.value=""; };
+vp.addEventListener("dragover", e => { e.preventDefault(); vp.classList.add("dragover"); });
+vp.addEventListener("dragleave", () => vp.classList.remove("dragover"));
+vp.addEventListener("drop", e => { e.preventDefault(); vp.classList.remove("dragover"); const f=e.dataTransfer.files[0]; if(f) loadFile(f); });
+
+async function loadFile(f){
+  S.fileName = f.name.replace(/\.[^.]+$/,"");
+  busy(true,"Opening plan…"); await nextFrame();
+  try{
+    if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)) {
+      if (!window.pdfjsLib) throw new Error("The PDF reader didn’t load. Check your connection and reload.");
+      const buf = await f.arrayBuffer();
+      S.pdf = await pdfjsLib.getDocument({data:buf}).promise;
+      S.isPdf = true;
+      const sel=$("pageSel"); sel.innerHTML="";
+      for(let i=1;i<=S.pdf.numPages;i++){ const o=document.createElement("option"); o.value=i; o.textContent=i; sel.appendChild(o); }
+      $("pageGrp").hidden = S.pdf.numPages < 2;
+      await renderPdfPage(1);
+    } else {
+      S.pdf=null; S.isPdf=false; $("pageGrp").hidden=true;
+      const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error("That image couldn’t be read.")); im.src=URL.createObjectURL(f); });
+      let w=img.naturalWidth, h=img.naturalHeight; const cap=Math.sqrt(10e6/(w*h));
+      const s=Math.min(1,cap); w=Math.round(w*s); h=Math.round(h*s);
+      setCanvas(w,h); S.ctx.drawImage(img,0,0,w,h);
+      S.renderScale = 1.25; // detection defaults tuned for ~90 dpi
+      afterLoad();
+      if ($("scaleSel").value!=="cal") flash("Images carry no paper size. Use the calibrate tool (C) on a known dimension to get square footage.", 7000);
+    }
+  }catch(err){ flash(err.message || String(err), 7000); }
+  busy(false);
+}
+$("pageSel").onchange = async e => { busy(true,"Rendering page…"); await nextFrame(); await renderPdfPage(+e.target.value); busy(false); };
+
+async function renderPdfPage(n){
+  S.pageNum=n;
+  const page = await S.pdf.getPage(n);
+  const v1 = page.getViewport({scale:1});
+  const R = Math.min(1.5, Math.sqrt(10e6/(v1.width*v1.height)));
+  const v = page.getViewport({scale:R});
+  setCanvas(Math.floor(v.width), Math.floor(v.height));
+  S.ctx.fillStyle="#fff"; S.ctx.fillRect(0,0,S.W,S.H);
+  await page.render({canvasContext:S.ctx, viewport:v}).promise;
+  S.renderScale = R;
+  afterLoad();
+}
+function setCanvas(w,h){
+  S.W=w; S.H=h; canvas.width=w; canvas.height=h;
+  canvas.style.width=w+"px"; canvas.style.height=h+"px";
+  ov.setAttribute("viewBox",`0 0 ${w} ${h}`); ov.setAttribute("width",w); ov.setAttribute("height",h);
+}
+function afterLoad(){
+  S.rooms=[]; S.barriers=[]; S.activeId=null; S.A=null; S.dirty=true; S.draft=[]; S.calPts=[]; S.barrierStart=null;
+  const R=S.renderScale;
+  S.params.gap = Math.round(13.5*R);
+  setParamUI();
+  $("empty").hidden=true; $("zoomCtl").hidden=false; $("detectBtn").disabled=false; $("importBtn").disabled=!S.isPdf;
+  updateScale(); fit(); renderAll();
+  hint(toolHint());
+}
+
+/* ---------- scale ---------- */
+$("scaleSel").onchange = () => { if($("scaleSel").value==="cal" && !S.calPxPerFt){ setTool("cal"); } updateScale(); renderAll(); };
+function updateScale(){
+  const v=$("scaleSel").value;
+  if (v==="cal") S.pxPerFt = S.calPxPerFt;
+  else S.pxPerFt = S.isPdf ? 72*S.renderScale*parseFloat(v) : S.calPxPerFt;
+  $("scaleState").textContent = S.W ? (S.pxPerFt ? `${(S.pxPerFt).toFixed(2)} px/ft` : "not set — calibrate") : "";
+  updateParamOutputs();
+}
+function sf(px2){ return S.pxPerFt ? px2/(S.pxPerFt*S.pxPerFt) : null; }
+
+/* ---------- detection params ---------- */
+["thr","thin","gap","minSf"].forEach(k => $(k).addEventListener("input", e => { S.params[k]=+e.target.value; S.dirty=true; updateParamOutputs(); }));
+function setParamUI(){ for(const k of ["thr","thin","gap","minSf"]) $(k).value=S.params[k]; updateParamOutputs(); }
+function updateParamOutputs(){
+  const p=S.params;
+  $("thrOut").textContent = p.thr;
+  $("thinOut").textContent = p.thin ? `${p.thin*2+1} px` : "off";
+  $("gapOut").textContent = S.pxPerFt ? `≈ ${(2*p.gap/S.pxPerFt).toFixed(1)} ft` : `${2*p.gap} px`;
+  $("minOut").textContent = `${p.minSf} SF`;
+}
+
+/* ---------- morphology ---------- */
+function dilate(src,W,H,r){
+  if(r<=0) return src.slice();
+  const tmp=new Uint8Array(W*H), out=new Uint8Array(W*H), ps=new Int32Array(Math.max(W,H)+1);
+  for(let y=0;y<H;y++){ const o=y*W; ps[0]=0;
+    for(let x=0;x<W;x++) ps[x+1]=ps[x]+src[o+x];
+    for(let x=0;x<W;x++){ const a=x-r<0?0:x-r, b=x+r+1>W?W:x+r+1; tmp[o+x]=ps[b]-ps[a]>0?1:0; } }
+  for(let x=0;x<W;x++){ ps[0]=0;
+    for(let y=0;y<H;y++) ps[y+1]=ps[y]+tmp[y*W+x];
+    for(let y=0;y<H;y++){ const a=y-r<0?0:y-r, b=y+r+1>H?H:y+r+1; out[y*W+x]=ps[b]-ps[a]>0?1:0; } }
+  return out;
+}
+function invert(m){ const o=new Uint8Array(m.length); for(let i=0;i<m.length;i++) o[i]=m[i]?0:1; return o; }
+function erode(src,W,H,r){ return r<=0 ? src.slice() : invert(dilate(invert(src),W,H,r)); }
+
+function stampLine(mask,W,H,a,b,rad){
+  const len=Math.hypot(b[0]-a[0],b[1]-a[1]), n=Math.max(1,Math.ceil(len));
+  for(let i=0;i<=n;i++){ const x=Math.round(a[0]+(b[0]-a[0])*i/n), y=Math.round(a[1]+(b[1]-a[1])*i/n);
+    for(let dy=-rad;dy<=rad;dy++) for(let dx=-rad;dx<=rad;dx++){ const xx=x+dx, yy=y+dy; if(xx>=0&&yy>=0&&xx<W&&yy<H) mask[yy*W+xx]=1; } }
+}
+
+/* ---------- analysis ---------- */
+async function analyze(){
+  const {W,H}=S, N=W*H, p=S.params;
+  busy(true,"Reading wall lines…"); await nextFrame();
+  const d=S.ctx.getImageData(0,0,W,H).data;
+  const dark=new Uint8Array(N);
+  for(let i=0,j=0;i<N;i++,j+=4){
+    const r=d[j],g=d[j+1],b=d[j+2];
+    const mx=r>g?(r>b?r:b):(g>b?g:b), mn=r<g?(r<b?r:b):(g<b?g:b);
+    dark[i] = (0.299*r+0.587*g+0.114*b) < p.thr && (mx-mn) < 70 ? 1 : 0; // ignore coloured markups
+  }
+  let walls = p.thin>0 ? dilate(erode(dark,W,H,p.thin),W,H,p.thin) : dark;
+  for(const bar of S.barriers) stampLine(walls,W,H,bar[0],bar[1],2);
+  busy(true,"Closing openings…"); await nextFrame();
+  const closed = dilate(walls,W,H,p.gap);
+  busy(true,"Finding enclosed spaces…"); await nextFrame();
+  const lab=new Int32Array(N), stack=new Int32Array(N);
+  const comps=[null]; let id=0;
+  for(let s=0;s<N;s++){
+    if(closed[s]||lab[s]) continue;
+    id++; let sp=0; stack[sp++]=s; lab[s]=id;
+    let area=0,minx=W,miny=H,maxx=0,maxy=0,border=false;
+    while(sp){
+      const q=stack[--sp]; area++;
+      const x=q%W, y=(q-x)/W;
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      if(x===0||y===0||x===W-1||y===H-1) border=true;
+      if(x>0   && !closed[q-1] && !lab[q-1]){lab[q-1]=id;stack[sp++]=q-1;}
+      if(x<W-1 && !closed[q+1] && !lab[q+1]){lab[q+1]=id;stack[sp++]=q+1;}
+      if(y>0   && !closed[q-W] && !lab[q-W]){lab[q-W]=id;stack[sp++]=q-W;}
+      if(y<H-1 && !closed[q+W] && !lab[q+W]){lab[q+W]=id;stack[sp++]=q+W;}
+    }
+    comps.push({id,area,minx,miny,maxx,maxy,border});
+  }
+  S.A={walls,lab,comps,W,H}; S.dirty=false;
+  busy(false);
+}
+
+function compToPolygon(c){
+  const {walls,lab,W,H}=S.A, g=S.params.gap, pad=g+3;
+  const x0=Math.max(0,c.minx-pad), y0=Math.max(0,c.miny-pad), x1=Math.min(W-1,c.maxx+pad), y1=Math.min(H-1,c.maxy+pad);
+  const w=x1-x0+1, h=y1-y0+1;
+  let m=new Uint8Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(lab[(y+y0)*W+x+x0]===c.id) m[y*w+x]=1;
+  m=dilate(m,w,h,g);                                    // grow back to the wall faces
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(walls[(y+y0)*W+x+x0]) m[y*w+x]=0;
+  m=fillHoles(m,w,h);
+  m=keepLargest(m,w,h);
+  const pts=traceContour(m,w,h);
+  if(pts.length<3) return null;
+  const simp=rdpClosed(pts, Math.max(1.5, 1.6*S.renderScale));
+  return simp.map(([x,y])=>[x+x0+0.5,y+y0+0.5]);
+}
+function fillHoles(m,w,h){
+  const out=m.slice(), seen=new Uint8Array(w*h), st=[];
+  const push=i=>{ if(!m[i]&&!seen[i]){seen[i]=1;st.push(i);} };
+  for(let x=0;x<w;x++){push(x);push((h-1)*w+x);} for(let y=0;y<h;y++){push(y*w);push(y*w+w-1);}
+  while(st.length){ const q=st.pop(), x=q%w, y=(q-x)/w;
+    if(x>0)push(q-1); if(x<w-1)push(q+1); if(y>0)push(q-w); if(y<h-1)push(q+w); }
+  for(let i=0;i<w*h;i++) if(!m[i]&&!seen[i]) out[i]=1;
+  return out;
+}
+function keepLargest(m,w,h){
+  const lab=new Int32Array(w*h); let best=0,bestA=0,id=0; const st=[];
+  for(let s=0;s<w*h;s++){ if(!m[s]||lab[s]) continue; id++; let a=0; st.push(s); lab[s]=id;
+    while(st.length){ const q=st.pop(); a++; const x=q%w, y=(q-x)/w;
+      const nb=[x>0?q-1:-1,x<w-1?q+1:-1,y>0?q-w:-1,y<h-1?q+w:-1];
+      for(const n of nb) if(n>=0&&m[n]&&!lab[n]){lab[n]=id;st.push(n);} }
+    if(a>bestA){bestA=a;best=id;} }
+  const o=new Uint8Array(w*h); for(let i=0;i<w*h;i++) o[i]=lab[i]===best?1:0; return o;
+}
+const DX=[1,1,0,-1,-1,-1,0,1], DY=[0,1,1,1,0,-1,-1,-1];
+function dirOf(dx,dy){ for(let i=0;i<8;i++) if(DX[i]===dx&&DY[i]===dy) return i; return 0; }
+function traceContour(m,w,h){
+  let s=-1; for(let i=0;i<w*h;i++) if(m[i]){s=i;break;} if(s<0) return [];
+  const at=(x,y)=>x>=0&&y>=0&&x<w&&y<h&&m[y*w+x]===1;
+  const sx=s%w, sy=(s-sx)/w; let cx=sx, cy=sy, bx=sx-1, by=sy;
+  const b0x=bx, b0y=by; const pts=[[cx,cy]]; const limit=w*h*2;
+  for(let it=0; it<limit; it++){
+    const d0=dirOf(bx-cx,by-cy); let moved=false;
+    for(let k=1;k<=8;k++){
+      const d=(d0+k)%8, nx=cx+DX[d], ny=cy+DY[d];
+      if(at(nx,ny)){ const pd=(d0+k-1)%8; bx=cx+DX[pd]; by=cy+DY[pd]; cx=nx; cy=ny; moved=true; break; }
+    }
+    if(!moved) break;
+    if(cx===sx&&cy===sy&&bx===b0x&&by===b0y) break;
+    if(cx===sx&&cy===sy && pts.length>8 && it>4*(w+h)*4) break;
+    pts.push([cx,cy]);
+  }
+  return pts;
+}
+function rdp(pts,eps){
+  if(pts.length<3) return pts.slice();
+  const keep=new Uint8Array(pts.length); keep[0]=keep[pts.length-1]=1;
+  const st=[[0,pts.length-1]];
+  while(st.length){ const [a,b]=st.pop(); let md=0,mi=-1;
+    const [ax,ay]=pts[a],[bx,by]=pts[b], dx=bx-ax, dy=by-ay, L=Math.hypot(dx,dy)||1;
+    for(let i=a+1;i<b;i++){ const d=Math.abs(dy*pts[i][0]-dx*pts[i][1]+bx*ay-by*ax)/L; if(d>md){md=d;mi=i;} }
+    if(md>eps&&mi>0){ keep[mi]=1; st.push([a,mi],[mi,b]); } }
+  return pts.filter((_,i)=>keep[i]);
+}
+function rdpClosed(pts,eps){
+  // split at the point farthest from the start so both halves are well conditioned
+  let far=0,fd=0; for(let i=1;i<pts.length;i++){ const d=Math.hypot(pts[i][0]-pts[0][0],pts[i][1]-pts[0][1]); if(d>fd){fd=d;far=i;} }
+  const a=rdp(pts.slice(0,far+1),eps), b=rdp(pts.slice(far).concat([pts[0]]),eps);
+  return a.concat(b.slice(1,-1));
+}
+
+/* ---------- geometry helpers ---------- */
+function polyArea(p){ let a=0; for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]+p[i][0])*(p[j][1]-p[i][1]); return Math.abs(a/2); }
+function inPoly(x,y,p){ let c=false; for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if(((yi>y)!==(yj>y)) && x<(xj-xi)*(y-yi)/(yj-yi)+xi) c=!c; } return c; }
+function labelPoint(p){
+  let a=0,cx=0,cy=0; for(let i=0,j=p.length-1;i<p.length;j=i++){ const f=p[j][0]*p[i][1]-p[i][0]*p[j][1]; a+=f; cx+=(p[j][0]+p[i][0])*f; cy+=(p[j][1]+p[i][1])*f; }
+  if(a){ cx/=3*a; cy/=3*a; } if(a && inPoly(cx,cy,p)) return [cx,cy];
+  const ys=p.map(q=>q[1]); const y=(Math.min(...ys)+Math.max(...ys))/2; const xs=[];
+  for(let i=0,j=p.length-1;i<p.length;j=i++){ const [xi,yi]=p[i],[xj,yj]=p[j]; if((yi>y)!==(yj>y)) xs.push(xi+(y-yi)*(xj-xi)/(yj-yi)); }
+  xs.sort((m,n)=>m-n); let best=[p[0][0],p[0][1]],bw=-1;
+  for(let i=0;i+1<xs.length;i+=2) if(xs[i+1]-xs[i]>bw){bw=xs[i+1]-xs[i]; best=[(xs[i]+xs[i+1])/2,y];}
+  return best;
+}
+function bbox(p){ let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity; for(const [x,y] of p){ if(x<a)a=x; if(y<b)b=y; if(x>c)c=x; if(y>d)d=y; } return [a,b,c,d]; }
+
+/* ---------- rooms ---------- */
+const PALETTE_NAMES=n=>`Room ${n}`;
+function addRoom(pts,source,comp){
+  const r={id:S.nextId++, name:PALETTE_NAMES(S.nextId-1), pts, include:false, source, comp:comp||null};
+  S.rooms.push(r); return r;
+}
+$("detectBtn").onclick = async () => {
+  if(!S.W) return;
+  if(S.dirty) await analyze();
+  busy(true,"Tracing outlines…"); await nextFrame();
+  const {comps,W,H}=S.A; const total=W*H;
+  const minPx = S.pxPerFt ? S.params.minSf*S.pxPerFt*S.pxPerFt : 2800*(S.renderScale/1.25)**2;
+  // keep manual rooms; replace earlier auto rooms
+  const kept=S.rooms.filter(r=>r.source!=="auto");
+  const wasIncluded=new Set(S.rooms.filter(r=>r.source==="auto"&&r.include).map(r=>r.name));
+  S.rooms=kept;
+  let found=0;
+  for(let i=1;i<comps.length;i++){
+    const c=comps[i]; if(c.border || c.area<minPx*0.5 || c.area>total*0.25) continue;
+    const pts=compToPolygon(c); if(!pts) continue;
+    if(polyArea(pts)<minPx) continue;
+    const r=addRoom(pts,"auto",c.id); found++;
+  }
+  // renumber auto rooms in reading order (top to bottom, left to right)
+  const autos=S.rooms.filter(r=>r.source==="auto").sort((a,b)=>{ const A=bbox(a.pts),B=bbox(b.pts); return (Math.round(A[1]/150)-Math.round(B[1]/150)) || (A[0]-B[0]); });
+  autos.forEach((r,i)=>{ r.name=`Room ${i+1}`; if(wasIncluded.has(r.name)) r.include=true; });
+  S.nextId = Math.max(S.nextId, autos.length+1);
+  busy(false); renderAll();
+  flash(found ? `Found ${found} enclosed spaces. Click a room (or tick it in the list) to include it in the takeoff.` : "No enclosed rooms found. Try closing doorways with the opening tool (B) or raising “Close openings up to”.", 7000);
+};
+
+async function clickDetect(x,y){
+  if(S.dirty) await analyze();
+  const {lab,comps,W,H}=S.A; const xi=Math.floor(x), yi=Math.floor(y);
+  if(xi<0||yi<0||xi>=W||yi>=H) return;
+  let id=lab[yi*W+xi];
+  if(!id){ // clicked on a wall/text: look nearby
+    outer: for(let r=1;r<=6;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){ const xx=xi+dx,yy=yi+dy; if(xx>=0&&yy>=0&&xx<W&&yy<H&&lab[yy*W+xx]){id=lab[yy*W+xx];break outer;} }
+  }
+  if(!id){ flash("That spot is on a wall or a dense hatch. Click in open floor area, or draw the room (D)."); return; }
+  const c=comps[id];
+  if(c.border || c.area>W*H*0.25){ flash("This space leaks to the outside of the drawing. Close the doorway with the opening tool (B), then click again."); return; }
+  const existing=S.rooms.find(r=>r.comp===id && r.source!=="drawn");
+  if(existing){ existing.include=true; S.activeId=existing.id; renderAll(); return; }
+  busy(true,"Tracing outline…"); await nextFrame();
+  const pts=compToPolygon(c); busy(false);
+  if(!pts){ flash("Couldn’t trace that space."); return; }
+  const r=addRoom(pts,"click",id); r.include=true; S.activeId=r.id; renderAll();
+}
+
+/* ---------- view transform ---------- */
+function applyView(){ const v=S.view; stage.style.transform=`translate(${v.x}px,${v.y}px) scale(${v.z})`; renderOverlay(); }
+function fit(){
+  if(!S.W) return; const r=vp.getBoundingClientRect();
+  const z=Math.min((r.width-40)/S.W,(r.height-40)/S.H);
+  S.view={z, x:(r.width-S.W*z)/2, y:(r.height-S.H*z)/2}; applyView();
+}
+function zoomAt(f,cx,cy){
+  const v=S.view, nz=Math.min(8,Math.max(0.05,v.z*f)), k=nz/v.z;
+  v.x=cx-(cx-v.x)*k; v.y=cy-(cy-v.y)*k; v.z=nz; applyView();
+}
+$("zIn").onclick=()=>{const r=vp.getBoundingClientRect(); zoomAt(1.4,r.width/2,r.height/2);};
+$("zOut").onclick=()=>{const r=vp.getBoundingClientRect(); zoomAt(1/1.4,r.width/2,r.height/2);};
+$("zFit").onclick=fit;
+window.addEventListener("resize",()=>{ if(S.W) applyView(); });
+vp.addEventListener("wheel",e=>{ if(!S.W) return; e.preventDefault(); const r=vp.getBoundingClientRect();
+  const f=Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0015)); zoomAt(f,e.clientX-r.left,e.clientY-r.top); },{passive:false});
+function toImg(e){ const r=vp.getBoundingClientRect(), v=S.view; return [(e.clientX-r.left-v.x)/v.z,(e.clientY-r.top-v.y)/v.z]; }
+
+/* ---------- tools ---------- */
+const TOOL_HINTS={
+  select:"Click a room to include or exclude it. Drag the corner handles of the highlighted room to adjust it. Delete removes it.",
+  pan:"Drag to move around. Scroll to zoom.",
+  click:"Click inside a room to trace it from the wall lines.",
+  draw:"Click each corner. Click the first point, double-click, or press Enter to finish. Hold Shift for square corners. Esc cancels.",
+  barrier:"Click two points across a doorway or opening to close it, then detect again.",
+  cal:"Click both ends of a dimension you know, then enter its length."
+};
+function toolHint(){ return S.W ? TOOL_HINTS[S.tool] : ""; }
+function setTool(t){
+  S.tool=t; S.draft=[]; S.barrierStart=null; S.calPts=[];
+  document.querySelectorAll(".tool").forEach(b=>b.setAttribute("aria-pressed", b.dataset.tool===t?"true":"false"));
+  vp.className="viewport t-"+t; hint(toolHint()); renderOverlay();
+}
+document.querySelectorAll(".tool").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+
+let spaceDown=false;
+window.addEventListener("keydown",e=>{
+  if(e.target.matches("input,select,textarea")||$("calDlg").open) return;
+  const k=e.key.toLowerCase();
+  if(k===" "){ spaceDown=true; vp.classList.add("t-pan"); e.preventDefault(); return; }
+  const map={v:"select",h:"pan",a:"click",d:"draw",b:"barrier",c:"cal"};
+  if(map[k]&&!e.metaKey&&!e.ctrlKey){ setTool(map[k]); return; }
+  if(e.key==="Escape"){ S.draft=[]; S.barrierStart=null; S.calPts=[]; renderOverlay(); }
+  if(e.key==="Enter" && S.tool==="draw") finishDraft();
+  if((e.key==="Delete"||e.key==="Backspace") && S.activeId){ deleteRoom(S.activeId); e.preventDefault(); }
+  if((e.key==="z")&&(e.metaKey||e.ctrlKey)&&S.tool==="draw"&&S.draft.length){ S.draft.pop(); renderOverlay(); }
+});
+window.addEventListener("keyup",e=>{ if(e.key===" "){ spaceDown=false; vp.className="viewport t-"+S.tool; } });
+
+/* pointer handling: drag = pan (or vertex move), click = tool action */
+const ptrs=new Map(); let drag=null, pinch=null;
+vp.addEventListener("pointerdown",e=>{
+  if(!S.W) return;
+  vp.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y), z:S.view.z}; drag=null; return; }
+  const p=toImg(e);
+  let vertex=-1;
+  if(S.tool==="select" && S.activeId && e.button===0 && !spaceDown){
+    const r=S.rooms.find(q=>q.id===S.activeId), tol=9/S.view.z;
+    if(r) r.pts.forEach((q,i)=>{ if(Math.hypot(q[0]-p[0],q[1]-p[1])<tol) vertex=i; });
+  }
+  drag={sx:e.clientX,sy:e.clientY,vx:S.view.x,vy:S.view.y,moved:false,vertex,button:e.button,
+        forcePan: spaceDown || S.tool==="pan" || e.button===1};
+});
+vp.addEventListener("pointermove",e=>{
+  if(!S.W) return;
+  if(ptrs.has(e.pointerId)) ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch && ptrs.size===2){ const [a,b]=[...ptrs.values()], r=vp.getBoundingClientRect();
+    const d=Math.hypot(a.x-b.x,a.y-b.y); zoomAt((pinch.z*d/pinch.d)/S.view.z,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top); return; }
+  const p=toImg(e); S.hover=p;
+  if(drag){
+    const dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
+    if(!drag.moved && Math.hypot(dx,dy)>4) drag.moved=true;
+    if(drag.moved){
+      if(drag.vertex>=0){ const r=S.rooms.find(q=>q.id===S.activeId); r.pts[drag.vertex]=[p[0],p[1]]; renderOverlay(); }
+      else { vp.classList.add("panning"); S.view.x=drag.vx+dx; S.view.y=drag.vy+dy; applyView(); }
+    }
+    return;
+  }
+  if((S.tool==="draw"&&S.draft.length)||(S.tool==="barrier"&&S.barrierStart)||(S.tool==="cal"&&S.calPts.length===1)) renderOverlay();
+});
+function endPointer(e){
+  ptrs.delete(e.pointerId);
+  if(pinch){ if(ptrs.size<2) pinch=null; drag=null; return; }
+  if(!drag) return; const d=drag; drag=null; vp.classList.remove("panning");
+  if(d.moved){ if(d.vertex>=0) renderAll(); return; }
+  if(d.forcePan || d.button!==0) return;
+  onClick(toImg(e), e);
+}
+vp.addEventListener("pointerup",endPointer);
+vp.addEventListener("pointercancel",e=>{ ptrs.delete(e.pointerId); drag=null; pinch=null; });
+vp.addEventListener("dblclick",e=>{ if(S.tool==="draw"){ e.preventDefault(); finishDraft(); } });
+
+function onClick(p,e){
+  const t=S.tool;
+  if(t==="select"){
+    const hits=S.rooms.filter(r=>inPoly(p[0],p[1],r.pts)).sort((a,b)=>polyArea(a.pts)-polyArea(b.pts));
+    if(hits.length){ const r=hits[0]; r.include=!r.include; S.activeId=r.id; }
+    else S.activeId=null;
+    renderAll();
+  } else if(t==="click"){ clickDetect(p[0],p[1]); }
+  else if(t==="draw"){
+    let q=p;
+    if(e.shiftKey && S.draft.length) q=ortho(S.draft[S.draft.length-1],p);
+    if(S.draft.length>=3 && Math.hypot(q[0]-S.draft[0][0],q[1]-S.draft[0][1])<10/S.view.z){ finishDraft(); return; }
+    // ignore the second click of a double-click
+    const last=S.draft[S.draft.length-1]; if(last && Math.hypot(q[0]-last[0],q[1]-last[1])<2/S.view.z) return;
+    S.draft.push(q); renderOverlay();
+  } else if(t==="barrier"){
+    if(!S.barrierStart){ S.barrierStart=p; }
+    else { const q=e.shiftKey?ortho(S.barrierStart,p):p; S.barriers.push([S.barrierStart,q]); S.barrierStart=null; S.dirty=true; flash("Opening closed. Detect again, or click inside the room with the add tool (A)."); }
+    renderOverlay();
+  } else if(t==="cal"){
+    S.calPts.push(e.shiftKey&&S.calPts.length?ortho(S.calPts[0],p):p);
+    if(S.calPts.length===2){ renderOverlay(); $("calLen").value=""; $("calDlg").showModal(); }
+    else renderOverlay();
+  }
+}
+function ortho(a,p){ return Math.abs(p[0]-a[0])>Math.abs(p[1]-a[1]) ? [p[0],a[1]] : [a[0],p[1]]; }
+function finishDraft(){
+  if(S.draft.length<3){ flash("A room needs at least three corners."); return; }
+  const r=addRoom(S.draft.slice(),"drawn"); r.include=true; S.activeId=r.id; S.draft=[]; renderAll();
+}
+
+/* calibration */
+function parseFeet(s){
+  s=s.trim().replace(/[’′]/g,"'").replace(/[”″]/g,'"');
+  let m=s.match(/^(\d+(?:\.\d+)?)\s*'\s*-?\s*(?:(\d+(?:\.\d+)?)\s*(?:(\d+)\/(\d+))?\s*(?:"|'')?)?$/);
+  if(m){ let ft=+m[1], inch=m[2]?+m[2]:0; if(m[3]) inch+= +m[3]/+m[4]; return ft+inch/12; }
+  m=s.match(/^(\d+(?:\.\d+)?)\s*(?:"|in)$/); if(m) return +m[1]/12;
+  m=s.match(/^(\d+(?:\.\d+)?)\s*(?:ft)?$/); if(m) return +m[1];
+  return NaN;
+}
+$("calCancel").onclick=()=>{ $("calDlg").close(); S.calPts=[]; renderOverlay(); };
+$("calOk").onclick=()=>{
+  const ft=parseFeet($("calLen").value);
+  if(!(ft>0)){ $("calLen").setCustomValidity("Enter a length like 24'-6\" or 24.5"); $("calLen").reportValidity(); return; }
+  $("calLen").setCustomValidity("");
+  const [a,b]=S.calPts; S.calPxPerFt=Math.hypot(b[0]-a[0],b[1]-a[1])/ft;
+  $("calDlg").close(); S.calPts=[]; $("scaleSel").value="cal"; updateScale(); renderAll();
+  flash(`Scale set: ${S.calPxPerFt.toFixed(2)} px per foot.`); setTool("select");
+};
+$("calLen").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("calOk").click(); } });
+
+/* ---------- rendering ---------- */
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtSf(r){ const a=sf(polyArea(r.pts)); return a==null?"— SF":`${Math.round(a).toLocaleString()} SF`; }
+function renderOverlay(){
+  if(!S.W){ ov.innerHTML=""; return; }
+  const z=S.view.z, fs=13/z, hr=5/z; let h="";
+  for(const r of S.rooms){
+    const cls="room"+(r.include?" inc":"")+(r.id===S.activeId?" active":"");
+    h+=`<polygon class="${cls}" points="${r.pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}"/>`;
+  }
+  for(const r of S.rooms){
+    const [x,y]=labelPoint(r.pts);
+    h+=`<text class="rlabel" x="${x}" y="${y}" font-size="${fs}" stroke-width="${3/z}" text-anchor="middle"><tspan x="${x}">${esc(r.name)}</tspan><tspan class="a" x="${x}" dy="${fs*1.15}">${fmtSf(r)}</tspan></text>`;
+  }
+  for(const b of S.barriers) h+=`<line class="barrier" x1="${b[0][0]}" y1="${b[0][1]}" x2="${b[1][0]}" y2="${b[1][1]}"/>`;
+  const act=S.rooms.find(r=>r.id===S.activeId);
+  if(act && S.tool==="select") for(const p of act.pts) h+=`<circle class="handle" cx="${p[0]}" cy="${p[1]}" r="${hr}"/>`;
+  const hv=S.hover;
+  if(S.tool==="draw" && S.draft.length){
+    const pts=S.draft.slice(); if(hv) pts.push(hv);
+    h+=`<polyline class="draft" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
+    for(const p of S.draft) h+=`<circle class="handle" cx="${p[0]}" cy="${p[1]}" r="${hr}"/>`;
+  }
+  if(S.tool==="barrier" && S.barrierStart && hv) h+=`<line class="barrier" style="opacity:.6" x1="${S.barrierStart[0]}" y1="${S.barrierStart[1]}" x2="${hv[0]}" y2="${hv[1]}"/>`;
+  if(S.tool==="cal" && S.calPts.length){ const a=S.calPts[0], b=S.calPts[1]||hv; if(b) h+=`<line class="cal" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`; }
+  ov.innerHTML=h;
+}
+function renderList(){
+  const ul=$("roomList"); ul.innerHTML="";
+  $("roomsEmpty").hidden=S.rooms.length>0;
+  $("roomsEmpty").textContent = S.W ? "No rooms yet. Press Detect rooms, click inside a room (A), or draw one (D)." : "No rooms yet. Open a plan, then detect rooms.";
+  const inc=S.rooms.filter(r=>r.include).length;
+  $("roomCount").textContent = S.rooms.length ? `${inc} of ${S.rooms.length} included` : "";
+  for(const r of S.rooms){
+    const li=document.createElement("li"); if(r.id===S.activeId) li.className="active";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=r.include; cb.setAttribute("aria-label",`Include ${r.name}`);
+    cb.onchange=()=>{ r.include=cb.checked; renderAll(); };
+    const nm=document.createElement("input"); nm.type="text"; nm.value=r.name; nm.setAttribute("aria-label","Room name");
+    nm.oninput=()=>{ r.name=nm.value; renderOverlay(); };
+    nm.onfocus=()=>{ S.activeId=r.id; renderOverlay(); document.querySelectorAll(".rooms li").forEach(x=>x.classList.remove("active")); li.classList.add("active"); };
+    const a=document.createElement("span"); a.className="sf"; a.textContent=fmtSf(r);
+    const del=document.createElement("button"); del.className="del"; del.textContent="✕"; del.title="Delete room"; del.setAttribute("aria-label",`Delete ${r.name}`);
+    del.onclick=()=>deleteRoom(r.id);
+    li.append(cb,nm,a,del);
+    li.addEventListener("dblclick",()=>zoomToRoom(r));
+    ul.appendChild(li);
+  }
+  updateNameRow();
+}
+function zoomToRoom(r){
+  const [x0,y0,x1,y1]=bbox(r.pts), v=vp.getBoundingClientRect();
+  const z=Math.min(6,Math.min(v.width/((x1-x0)*1.6),v.height/((y1-y0)*1.6)));
+  S.view={z,x:v.width/2-(x0+x1)/2*z,y:v.height/2-(y0+y1)/2*z}; S.activeId=r.id; applyView(); renderList();
+}
+function deleteRoom(id){ S.rooms=S.rooms.filter(r=>r.id!==id); if(S.activeId===id) S.activeId=null; renderAll(); }
+$("allBtn").onclick=()=>{ S.rooms.forEach(r=>r.include=true); renderAll(); };
+$("noneBtn").onclick=()=>{ S.rooms.forEach(r=>r.include=false); renderAll(); };
+["product","overage","tileSf","adhesive","pailSf"].forEach(k=>$(k).addEventListener("input",renderTakeoff));
+
+function takeoff(){
+  const inc=S.rooms.filter(r=>r.include);
+  if(!inc.length || !S.pxPerFt) return null;
+  const net=inc.reduce((s,r)=>s+sf(polyArea(r.pts)),0);
+  const ov=Math.max(0,+$("overage").value||0), tile=Math.max(0.01,+$("tileSf").value||4), pail=Math.max(1,+$("pailSf").value||1500);
+  const tiles=Math.ceil(net*(1+ov/100)/tile), gross=Math.round(tiles*tile), pails=Math.max(1,Math.ceil(gross/pail));
+  return {rooms:inc.length, net, overage:ov, tiles, gross, pails, product:$("product").value.trim()||"GenieMat FIT", adhesive:$("adhesive").value.trim()};
+}
+function takeoffLines(t){
+  const l=[`${t.gross.toLocaleString()} SF ${t.product} (${t.tiles.toLocaleString()} tiles) (${t.overage}% overage)`];
+  if(t.adhesive) l.push(`${t.pails} pail${t.pails===1?"":"s"} of ${t.adhesive}`);
+  return l;
+}
+function renderTakeoff(){
+  const t=takeoff(), tb=$("tblock");
+  const anyInc=S.rooms.some(r=>r.include);
+  if(!t){ tb.className="tblock empty-t"; tb.textContent = anyInc && !S.pxPerFt ? "Set the drawing scale or calibrate to get square footage." : "Tick rooms to build the takeoff."; }
+  else { tb.className="tblock"; tb.innerHTML=takeoffLines(t).map(l=>`<span class="l">${esc(l)}</span>`).join("")+
+    `<span class="l" style="font-family:Archivo,sans-serif;font-size:12.5px;color:var(--muted);margin-top:4px">${t.rooms} room${t.rooms===1?"":"s"}, ${Math.round(t.net).toLocaleString()} SF net</span>`; }
+  $("exportPng").disabled=!S.rooms.length; $("exportJson").disabled=!S.rooms.length || !S.isPdf;
+}
+function renderAll(){ renderOverlay(); renderList(); renderTakeoff(); }
+
+/* ---------- exports ---------- */
+async function saveFile(filename, blobOrString){
+  if(downloadsNs){
+    try{ await downloadsNs.save({filename, data:blobOrString}); flash(`Saved ${filename}.`); }
+    catch(e){ if(e && e.code!=="declined") flash(`Couldn’t save the file (${e.code||"error"}).`); }
+    return;
+  }
+  const blob = blobOrString instanceof Blob ? blobOrString : new Blob([blobOrString],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+$("exportPng").onclick=async()=>{
+  const inc=S.rooms.filter(r=>r.include), show=inc.length?inc:S.rooms;
+  let [x0,y0,x1,y1]=bbox(show.flatMap(r=>r.pts));
+  const m=60; x0=Math.max(0,Math.floor(x0-m)); y0=Math.max(0,Math.floor(y0-m)); x1=Math.min(S.W,Math.ceil(x1+m)); y1=Math.min(S.H,Math.ceil(y1+m));
+  const t=takeoff(), lines=t?takeoffLines(t):[`${S.fileName} — room outlines`];
+  const fs=Math.max(18,Math.round((x1-x0)/70)), head=Math.round(fs*1.5*lines.length+fs*1.4);
+  const c=document.createElement("canvas"); c.width=x1-x0; c.height=y1-y0+head; const g=c.getContext("2d");
+  g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height);
+  g.drawImage(canvas,x0,y0,x1-x0,y1-y0,0,head,x1-x0,y1-y0);
+  g.fillStyle="rgba(255,255,255,.45)"; g.fillRect(0,head,c.width,c.height-head);
+  g.save(); g.translate(-x0,head-y0);
+  for(const r of show){
+    g.beginPath(); r.pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1])); g.closePath();
+    g.fillStyle = r.include ? "rgba(229,154,11,.22)" : "rgba(47,108,143,.08)"; g.fill();
+    g.lineWidth = r.include ? Math.max(2,fs/7) : 1.5; g.strokeStyle = r.include ? "#1C2326" : "#2F6C8F";
+    g.setLineDash(r.include?[]:[8,5]); g.stroke(); g.setLineDash([]);
+  }
+  g.font=`600 ${Math.round(fs*0.8)}px Archivo, Arial, sans-serif`; g.textAlign="center"; g.lineJoin="round";
+  for(const r of show){ const [x,y]=labelPoint(r.pts);
+    g.lineWidth=4; g.strokeStyle="#fff"; g.strokeText(r.name,x,y); g.fillStyle="#1C2326"; g.fillText(r.name,x,y);
+    const a=fmtSf(r); g.font=`400 ${Math.round(fs*0.7)}px Archivo, Arial, sans-serif`; g.strokeText(a,x,y+fs*0.9); g.fillText(a,x,y+fs*0.9);
+    g.font=`600 ${Math.round(fs*0.8)}px Archivo, Arial, sans-serif`; }
+  g.restore();
+  g.fillStyle="#1C2326"; g.textAlign="left"; g.font=`400 ${fs}px Georgia, "Times New Roman", serif`;
+  lines.forEach((l,i)=>g.fillText(l, fs*0.8, fs*1.4+i*fs*1.5));
+  const blob=await new Promise(r=>c.toBlob(r,"image/png"));
+  saveFile(`${S.fileName||"plan"} - takeoff outline.png`, blob);
+};
+let importedSource=null;
+$("importBtn").onclick=()=>$("importFile").click();
+$("importFile").onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    const data=JSON.parse(await f.text());
+    if(!S.isPdf){ flash("Open the plan PDF first, then load its rooms.json."); return; }
+    if(data.page && data.page!==S.pageNum){ $("pageSel").value=data.page; busy(true,"Rendering page…"); await nextFrame(); await renderPdfPage(data.page); busy(false); }
+    const R=S.renderScale;
+    importedSource=data.source||null;
+    if(data.scale && data.scale.pt_per_ft){
+      S.calPxPerFt=data.scale.pt_per_ft*R;
+      const opt=[...$("scaleSel").options].find(o=>Math.abs(parseFloat(o.value)-data.scale.in_per_ft)<1e-6);
+      $("scaleSel").value=opt?opt.value:"cal"; updateScale();
+    }
+    S.rooms=(data.rooms||[]).map(r=>({id:r.id, name:r.name||`Room ${r.id}`, number:r.number||null, include:!!r.included,
+      pts:r.outline_pt.map(p=>[p[0]*R,p[1]*R]), source:"auto", comp:null}));
+    S.barriers=(data.barriers_pt||[]).map(b=>[[b[0][0]*R,b[0][1]*R],[b[1][0]*R,b[1][1]*R]]);
+    S.nextId=Math.max(0,...S.rooms.map(r=>r.id))+1; S.activeId=null; renderAll();
+    flash(`Loaded ${S.rooms.length} rooms. Click rooms to include them, fix outlines, then save rooms.json.`,7000);
+  }catch(err){ flash("That file isn’t a rooms.json from the pipeline."); }
+};
+$("exportJson").onclick=()=>{
+  if(!S.isPdf){ flash("rooms.json is saved in PDF coordinates, so it needs a PDF plan."); return; }
+  const R=S.renderScale, k=S.pxPerFt;
+  const v=$("scaleSel").value;
+  const data={ source: importedSource || S.fileName+".pdf", page:S.pageNum,
+    scale: k ? {label: v==="cal" ? "calibrated" : $("scaleSel").selectedOptions[0].textContent, in_per_ft: k/R/72, pt_per_ft: k/R} : null,
+    barriers_pt: S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]]),
+    rooms: S.rooms.map((r,i)=>({ id:r.id, name:r.name, number:r.number||null, included:r.include,
+      area_sf: k?Math.round(sf(polyArea(r.pts))*10)/10:null,
+      outline_pt: r.pts.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)]) })) };
+  saveFile("rooms.json", JSON.stringify(data,null,2));
+};
+
+
+/* ---------- read room names with Claude (optional) ---------- */
+function updateNameRow(){ $("nameRow").hidden = !(sampleNs && sampleImgMax>0 && S.rooms.length); }
+$("nameBtn").onclick=async()=>{
+  const btn=$("nameBtn"); btn.disabled=true; const label=btn.textContent;
+  const targets=S.rooms.filter(r=>/^Room \d+$/.test(r.name)); if(!targets.length){ flash("Every room already has a name."); btn.disabled=false; return; }
+  try{
+    for(let i=0;i<targets.length;i+=sampleImgMax){
+      const batch=targets.slice(i,i+sampleImgMax);
+      btn.textContent=`Reading names… ${Math.min(i+batch.length,targets.length)}/${targets.length}`;
+      const imgs=await Promise.all(batch.map(roomCrop));
+      const list=batch.map((r,j)=>`Image ${j+1} = room id ${r.id}`).join("\n");
+      const prompt=`These are crops of an architectural floor plan. In each image one room is outlined in thick orange. Read the room name and room number printed inside the orange outline (for example "FITNESS 420" or "YOGA 431"). Ignore finish tags, keynotes and dimensions. If no room name is legible inside the outline, use null.\n${list}\nReply with only a JSON object mapping each room id (as a string) to its name, like {"12":"FITNESS 420","13":null}.`;
+      const res=await sampleNs.json(prompt,{images:imgs});
+      for(const r of batch){ const v=res && res[String(r.id)]; if(typeof v==="string" && v.trim()) r.name=v.trim(); }
+      renderAll();
+    }
+    flash("Room names updated. Check them against the plan.");
+  }catch(e){
+    if(e && e.code==="not_granted"){ sampleNs=null; updateNameRow(); }
+    else flash(e && e.code==="rate_limited" ? "Too many requests right now. Try again in a minute." : "Couldn’t read the room names this time.");
+  }
+  btn.textContent=label; btn.disabled=false;
+};
+function roomCrop(r){
+  let [x0,y0,x1,y1]=bbox(r.pts); const pad=Math.max(30,0.12*Math.max(x1-x0,y1-y0));
+  x0=Math.max(0,x0-pad); y0=Math.max(0,y0-pad); x1=Math.min(S.W,x1+pad); y1=Math.min(S.H,y1+pad);
+  const w=x1-x0, h=y1-y0, s=Math.min(2.5,1100/Math.max(w,h));
+  const c=document.createElement("canvas"); c.width=Math.round(w*s); c.height=Math.round(h*s); const g=c.getContext("2d");
+  g.imageSmoothingQuality="high"; g.drawImage(canvas,x0,y0,w,h,0,0,c.width,c.height);
+  g.beginPath(); r.pts.forEach((p,i)=>{ const x=(p[0]-x0)*s, y=(p[1]-y0)*s; i?g.lineTo(x,y):g.moveTo(x,y); }); g.closePath();
+  g.lineWidth=4; g.strokeStyle="rgba(240,140,0,.9)"; g.stroke();
+  return new Promise(res=>c.toBlob(res,"image/png"));
+}
+
+setParamUI(); renderAll();
+</script>
+</body>
+</html>

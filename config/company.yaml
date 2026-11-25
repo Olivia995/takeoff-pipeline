@@ -1,0 +1,27 @@
+# Title block content for generated takeoff sheets.
+company: PLITEQ
+logo: null            # optional path to a PNG/JPG logo, e.g. config/pliteq-logo.png
+address:
+  - "Phone: (416) 449 - 0049"
+  - "Fax: (416) 849 - 0415"
+  - ""
+  - 131 Royal Group Crescent
+  - Vaughan, ON L4H 1X9
+  - Canada
+drawing_title: "GenieMat® FIT Takeoff"
+reviewed_by: VY
+copyright: "© Pliteq Inc. 2026"
+
+general_notes: >-
+  This technical schematic is deemed accurate based on the latest available
+  information. However, the issuing entity reserves the right to modify the
+  specifications at any time without notice. Pliteq disclaims liability for the
+  accuracy or completeness of this drawing, which is based solely on
+  client-provided plans and specifications. The client is responsible for
+  verifying quantities and ensuring their accuracy before submitting purchase
+  orders.
+
+sheet_notes:
+  - Scaled according to original drawing dimensions
+  - GenieMat FIT tiles are not warrantied for olympic style lifting
+  - GenieMat Envy/GenieMat PeakForce/GenieMat PeakForce Elite are not warranted for damage associated with weight drops

@@ -1,0 +1,64 @@
+# =============================================================================
+# QUANTITY + ADHESIVE RULES
+# Copied from the "GR (SF)" tab of the Adhesive Takeoff Check sheet, with the
+# corrections agreed with Pliteq (see comments).
+# =============================================================================
+
+# Overage by the product's TOTAL area (or LF) across the whole takeoff.
+# A value exactly on a boundary gets the HIGHER overage
+# (250 -> 15%, 500 -> 13%, 750 -> 11%).
+overage_tiers:
+  - {max: 250, pct: 15}
+  - {max: 500, pct: 13}
+  - {max: 750, pct: 11}
+  - {max: null, pct: 9}
+
+# Extra standard-transition pieces, based on the counted pieces.
+transition_overage:
+  - {max: 5,    extra: 0}
+  - {max: 11,   extra: 1}
+  - {max: 19,   extra: 2}
+  - {max: 39,   extra: 3}
+  - {max: 79,   extra: 4}
+  - {max: 159,  extra: 5}
+  - {max: null, extra: 6}
+
+ramps:
+  ada_piece_in: 42          # ADA ramp width
+  standard_piece_in: 48     # standard ramp (wing) width
+  standard_round_in: 6      # edges are rounded up to the next 6"
+  standard_max_share_in: 42 # only edges using <= 42" of a piece may share it
+  standard_max_per_piece: 3 # one piece can be cut for at most 3 edges
+  # Depth (length in direction of travel) in inches, used for adhesive.
+  # NOTE: the spreadsheet uses 18" / 12" for standard ramps; Pliteq confirmed
+  # they are 9" / 6", so those values are used here.
+  depth_in:
+    FIT70: {ada: 32.5, standard: 9}
+    FIT30: {ada: 13,   standard: 6}
+
+adhesive:
+  # The calculator works in "FASHM pails". FAS1 covers 3 1/3 times more,
+  # so FAS1 pails = FASHM pails x 0.3.
+  fas1_factor: 0.3
+  # Gluing onto GenieMat FF / FFNC uses 1.515x the area.
+  onto_ff_multiplier: 1.5151515151515151
+  # Gluing onto plywood adds SF / 1500 (FASHM pails) on top of the normal rate.
+  onto_plywood_extra_sf_per_pail: 1500
+  # SF per FASHM pail, by adhesive class (see products.yaml "adhesive").
+  rates_sf_per_pail:
+    fit70: 500
+    fit30: 400
+    rolled: 150
+    turf: 100
+  # FAS3 (planks, LVT, VersaRUBBER ELITE, Envy): SF per pail.
+  fas3_sf_per_pail: 600
+  # Plywood that is explicitly glued (FAS1 SF per pail).
+  plywood_glued:
+    onto_fit_tiles: 120
+    onto_ff: 100        # area is also multiplied by onto_ff_multiplier
+    other: 100
+
+# 1 SF = 0.09290304 SM, 1 LF = 0.3048 LM
+metric:
+  sf_to_sm: 0.09290304
+  lf_to_lm: 0.3048

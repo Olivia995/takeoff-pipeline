@@ -1,0 +1,185 @@
+# =============================================================================
+# NOTES LIBRARY  (from the "Note / When to Use" table in the instructions)
+# =============================================================================
+# auto: true   -> the engine ticks this note itself when "when" is true
+#                 (logic lives in takeoff/notes.py, function of the same id).
+# auto: false  -> the drafter ticks it in the app.
+# {placeholders} are filled from the takeoff (dates, depths, product names).
+# Notes print on the drawing in the order listed here.
+# =============================================================================
+
+notes:
+  - id: ada_consultant
+    auto: true
+    when: An ADA transition is used.
+    text: ADA transition placements should always be verified by an ADA consultant.
+
+  - id: client_no_transitions
+    auto: true
+    when: Client asked for no transitions (date entered by drafter).
+    text: Transitions not included as per client request on {date}.
+
+  - id: client_no_ada
+    auto: true
+    when: Client asked for no ADA transitions (date entered by drafter).
+    text: ADA Transitions not included as per client request on {date}.
+
+  - id: shimmed
+    auto: true
+    when: A ramp tier has to be trimmed/shimmed (height not a full 30 or 70 mm tier).
+    text: Transitions are to be shimmed/trimmed to accommodate material thickness.
+
+  - id: blocking_single
+    auto: true
+    when: Single-tier transition raised on wood blocking (not to grade).
+    text: Wood blocking for transitions supplied by others.
+
+  - id: blocking_tiered
+    auto: true
+    when: Buildup over 70 mm needs a tiered (2x or more) transition.
+    text: Wood blocking for tiered transitions supplied by others.
+
+  - id: tile_edge_support
+    auto: true
+    when: FIT over GenieMat FF (or FF + plywood) and there are transitions.
+    text: Wood support for tile edge at ramping/entryways supplied by others.
+
+  - id: fit30_interlock_support
+    auto: true
+    when: Slab fully recessed and FIT30 interlocks with FIT70.
+    text: Support under GenieMat FIT30 tiles where they interlock with the GenieMat FIT70 tiles supplied by others.
+
+  - id: doors_trimmed
+    auto: true
+    when: A door opens over GenieMat material and the slab is not recessed.
+    text: Any doors sitting above GenieMat material must be trimmed to accommodate height of products.
+
+  - id: interface_adhesive
+    auto: true
+    when: Different materials are glued to each other (not counting FIT tiles to the layer below).
+    text: "{parts} included in the BOM."
+
+  - id: rolled_to_slab
+    auto: true
+    when: A rolled good is glued to the slab under other layers.
+    text: "{parts} included in the BOM."
+
+  - id: glueless
+    auto: true
+    when: FIT installed over GenieMat FFxxNBN (no adhesive).
+    text: Contact Pliteq for glueless GenieMat FIT installation instructions.
+
+  - id: plywood_not_ff
+    auto: true
+    when: Plywood glued onto GenieMat FFxxNBN.
+    text: Adhesive should be applied to the plywood not the {product}.
+
+  - id: rst_loose
+    auto: false
+    when: BDE instructs (rare).
+    text: GenieMat RST10 is to be loose laid on the subfloor, no adhesive required.
+
+  - id: fashm_exclusive
+    auto: true
+    when: A rolled interstitial layer sits on FIT tiles (C1 tiles).
+    text: Pliteq FASHM is exclusively intended for the adhesion of {product} to GenieMat FIT tiles.
+
+  - id: recessed_no_transitions
+    auto: true
+    when: Slab recessed and no transitions.
+    text: No transitions - recessed slab assumed.
+
+  - id: recess_depth
+    auto: true
+    when: Slab recessed (depth entered) but transitions still needed.
+    text: '{depth}" recessed slab assumed.'
+
+  - id: stairs
+    auto: false
+    when: Material carried through to stairs.
+    text: Finished floor elevations may alter initial stair tread. Stairs to be modified to accommodate height of buildup.
+
+  - id: washroom_raised
+    auto: false
+    when: Slab not recessed and no transition into the washroom (or another small room).
+    text: Assumed washroom floor will be raised to be even height with the GenieMat FIT70.
+
+  - id: flush_recessed
+    auto: false
+    when: Adjacent buildups differ by 3/4" or less.
+    text: Assumed all material buildups will be recessed sufficiently to be even in height with adjacent finishes and entryways.
+
+  - id: corridor_raised
+    auto: false
+    when: Slab not recessed and no transition to an adjacent corridor.
+    text: Assumed corridor floor adjacent to the gymnasium will be raised to be even in height with the fitness room flooring build up.
+
+  - id: ffnc_tiered
+    auto: false
+    when: Buildup over 70 mm in multiples of 25 mm, FFNC25NBN used instead of wood blocking.
+    text: GenieMat FFNC25NBN to be used for the tiered ramping and support for the tile edge at the ramping/entryways.
+
+  - id: ffnc50_two_layers
+    auto: false
+    when: Multiple layers of GenieMat FF/FFNC stacked.
+    text: GenieMat FFNC50NBN is two layers of GenieMat FFNC25NBN.
+
+  - id: rst_ff_over_ramping
+    auto: false
+    when: Finished floor goes over the ramping.
+    text: GenieMat RST10 and Finished Floors to be installed over GenieMat FIT ramping.
+
+  - id: rst_fit08_under_top_tier
+    auto: false
+    when: FIT08/RST10 used instead of wood blocking over FIT70.
+    text: GenieMat RST10 and GenieMat FIT08 to be installed under the top tier transition.
+
+  - id: finished_by_manufacturer
+    auto: true
+    when: There is a finished floor and its adhesive is not supplied by Pliteq.
+    text: Finished layer adhesive to be supplied by manufacturer.
+
+  - id: interstitial_recommended
+    auto: true
+    when: Finished floor directly on FIT tiles (no RST10 interstitial layer).
+    text: A minimum 10mm interstitial layer is recommended by Pliteq to reduce seam telegraphing from the GenieMat FIT tiles.
+
+  - id: second_plywood
+    auto: true
+    when: Two layers of plywood over rolled GenieMat FF.
+    text: 2nd layer of plywood to be installed cross-laid with staggered seams to the 1st layer of plywood and is to be screwed to the 1st layer of plywood every 12" o/c.
+
+  - id: substrates
+    auto: false
+    when: Drafter's choice.
+    text: Please confirm approved substrates for GenieMat FIT Tile and accessory installations with your local Pliteq Engineer.
+
+  - id: load_plates
+    auto: true
+    when: GenieMat PeakForce or GenieMat LDM5-25 is used.
+    text: GenieMat Load Plates are required for all point loads. Please contact your local Pliteq Engineer for more details.
+
+  - id: peakforce_fas3
+    auto: true
+    when: Any PeakForce takeoff.
+    text: Pliteq FAS3 is to be used with the GenieMat Envy layer of the GenieMat PeakForce buildup.
+
+  - id: xfit_peakforce_glued
+    auto: true
+    when: xFIT70 and PeakForce are installed side by side.
+    text: GenieMat xFIT70 tiles abutting GenieMat PeakForce and GenieMat PeakForce tiles abutting GenieMat xFIT70 must be fully glued down.
+
+  - id: raceway_waste
+    auto: false
+    when: FIT tiles over raceways/conduits.
+    text: Specific layouts to accommodate the electrical raceway may result in increased waste. Please consider adding additional overage as needed.
+
+  - id: raceway_confirm
+    auto: false
+    when: FIT tiles over raceways/conduits.
+    text: Raceway layout should be confirmed with the on-site Pliteq Engineer during the installation.
+
+  - id: finished_floor_approval
+    auto: true
+    when: Finished floor over RST over FIT tiles.
+    text: All finished flooring being installed over GenieMat® FIT Tiles and the interstitial layer must receive prior approval from your designated Pliteq engineer to ensure system compatibility.

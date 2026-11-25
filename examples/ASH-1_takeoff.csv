@@ -1,0 +1,8 @@
+type,item,quantity,measure,units,unit,overage_pct,line
+product,GenieMat FIT70,2968,SF,742,tile,9,2968 SF GenieMat FIT70 (742 tiles) (9% overage)
+adhesive,Pliteq FAS1 Adhesive,2,pails,,,,2 pails of Pliteq FAS1 Adhesive
+
+room,area_sf
+FITNESS 422,2437.2
+YOGA 420,197.3
+YOGA 420,86.0

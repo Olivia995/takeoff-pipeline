@@ -1,0 +1,91 @@
+# Product catalog and flooring systems used to build takeoffs.
+#
+# Unit sizes were worked out from the sample takeoff sheets
+# (e.g. 3720 SF GenieMat RST10 = 62 rolls -> 60 SF per roll).
+# Adhesive coverages marked "VERIFY" are estimates; replace them with the
+# figures from the product data sheets before using this for real quotes.
+
+defaults:
+  overage_pct: 9          # applied to net area before rounding up to whole units
+
+products:
+  GenieMat FIT70:      {unit: tile,  unit_size: 4,     measure: SF}
+  GenieMat FIT70-C1:   {unit: tile,  unit_size: 4,     measure: SF}
+  GenieMat FIT30:      {unit: tile,  unit_size: 4,     measure: SF}
+  GenieMat FIT08:      {unit: roll,  unit_size: 100,   measure: SF, overage_pct: 15}
+  GenieMat RST10:      {unit: roll,  unit_size: 60,    measure: SF}
+  GenieMat FFNC50NBN:  {unit: roll,  unit_size: 21,    measure: SF}
+  GenieMat FF70LDM:    {unit: panel, unit_size: 3.754, measure: SF}
+  VersaRUBBER ELITE:   {unit: plank, unit_size: 3.2,   measure: SF}
+  GenieMat PMI12PF:    {unit: roll,  unit_size: 50,    measure: LF, overage_pct: 15}
+  GenieMat FIT70 Standard Transition: {measure: LF}
+  GenieMat FIT70 ADA Transition:      {measure: LF}
+
+adhesives:
+  FAS1:  {name: Pliteq FAS1 Adhesive}
+  FASHM: {name: Pliteq FASHM Adhesive}
+  FAS3:  {name: Pliteq FAS3 Adhesive}
+
+# A system is the stack of layers installed over the selected rooms, listed
+# bottom (slab) to top. Each layer may carry an adhesive with a coverage in
+# SF per pail; adhesive is calculated on the layer's ordered (gross) SF,
+# summed per adhesive, then rounded up to whole pails.
+systems:
+  FIT70:
+    callout: GenieMat FIT70
+    layers:
+      - {product: GenieMat FIT70, adhesive: FAS1, sf_per_pail: 1500}      # VERIFY
+    notes:
+      - No transitions - recessed slab assumed.
+
+  FIT30:
+    callout: GenieMat FIT30
+    layers:
+      - {product: GenieMat FIT30, adhesive: FAS1, sf_per_pail: 1500}      # VERIFY
+    notes:
+      - No transitions - recessed slab assumed.
+
+  FIT70-C1 + RST10:
+    callout: "Finished Floor (supplied by others) over\nGenieMat RST10 over\nGenieMat FIT70-C1"
+    layers:
+      - {product: GenieMat FIT70-C1, adhesive: FAS1, sf_per_pail: 1500}   # VERIFY
+      - {product: GenieMat RST10, adhesive: FASHM, sf_per_pail: 151, bonds_to: GenieMat FIT70-C1}
+    notes:
+      - Pliteq FASHM is exclusively intended for the adhesion of GenieMat RST10 to GenieMat FIT tiles.
+      - Finished layer adhesive to be supplied by manufacturer.
+      - All finished flooring being installed over GenieMat® FIT Tiles and the interstitial layer must receive prior approval from your designated Pliteq engineer to ensure system compatibility.
+
+  FIT70-C1 + RST10 + finish adhesive:
+    callout: "Finished Floor (supplied by others) over\nGenieMat RST10 over\nGenieMat FIT70-C1"
+    layers:
+      - {product: GenieMat FIT70-C1, adhesive: FAS1, sf_per_pail: 1500}   # VERIFY
+      - {product: GenieMat RST10, adhesive: FASHM, sf_per_pail: 151, bonds_to: GenieMat FIT70-C1}
+      - {adhesive_only: true, adhesive: FAS1, sf_per_pail: 496, label: finished floor, bonds_to: GenieMat RST10}
+    notes:
+      - Pliteq FASHM is exclusively intended for the adhesion of GenieMat RST10 to GenieMat FIT tiles.
+      - All finished flooring being installed over GenieMat® FIT Tiles and the interstitial layer must receive prior approval from your designated Pliteq engineer to ensure system compatibility.
+
+  FIT70 + FFNC50NBN:
+    callout: "GenieMat FIT70 over\nGenieMat FFNC50NBN"
+    layers:
+      - {product: GenieMat FFNC50NBN, adhesive: FAS1, sf_per_pail: 499, bonds_to: slab}
+      - {product: GenieMat FIT70, adhesive: FAS1, sf_per_pail: 1500}      # VERIFY
+    notes:
+      - GenieMat FFNC50NBN is two layers of GenieMat FFNC25NBN.
+
+  VersaRUBBER + RST10 + FIT70-C1:
+    callout: "VersaRUBBER ELITE over\nGenieMat RST10 over\nGenieMat FIT70-C1"
+    overage_pct: 13
+    layers:
+      - {product: GenieMat FIT70-C1, adhesive: FAS1, sf_per_pail: 1500}   # VERIFY
+      - {product: GenieMat RST10, adhesive: FASHM, sf_per_pail: 162, bonds_to: GenieMat FIT70-C1}
+      - {product: VersaRUBBER ELITE, adhesive: FAS3, sf_per_pail: 611, bonds_to: GenieMat RST10}
+    notes:
+      - Pliteq FASHM is exclusively intended for the adhesion of GenieMat RST10 to GenieMat FIT tiles.
+
+# Notes added automatically when transitions are part of the takeoff.
+transition_notes:
+  - ADA transition placements should always be verified by an ADA consultant.
+  - Any doors sitting above GenieMat material must be trimmed to accommodate height of products.
+  - Transitions are to be shimmed/trimmed to accommodate material thickness.
+  - Wood blocking for tiered transitions supplied by others.

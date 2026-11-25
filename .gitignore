@@ -1,0 +1,19 @@
+# Python environment and caches
+.venv/
+__pycache__/
+*.pyc
+
+# API keys and per-computer AI settings: never commit
+config/gemini_key.txt
+config/anthropic_key.txt
+config/ai_settings.json
+
+# Client drawings and what's built from them (confidential, and large)
+plans/
+jobs/
+work/
+out/
+examples/*.pdf
+
+# macOS
+.DS_Store

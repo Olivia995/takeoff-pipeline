@@ -1,0 +1,8 @@
+pymupdf>=1.24
+opencv-python-headless>=4.8
+numpy>=1.24
+PyYAML>=6.0
+certifi>=2024.2.2
+anthropic>=2.8      # Claude: AI first pass, border tracing, opening and equipment checks
+# only to convert a new AutoCAD sheet template: python -m takeoff.template template.dxf
+# ezdxf>=1.3

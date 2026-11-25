@@ -1,0 +1,229 @@
+{
+  "source": "/Users/oliviadinardo/Pliteq-Takeoffs/takeoff-pipeline/plans/IA708_-FINISH-PLAN-BLDG.-2-LEVEL-4-AMENITY-Rev.3-markup-1.pdf",
+  "page": 1,
+  "scale": {
+    "label": "1/4\u2033 = 1\u2032-0\u2033",
+    "in_per_ft": 0.25,
+    "pt_per_ft": 18.0
+  },
+  "barriers_pt": [],
+  "takeoff": {
+    "project": "k",
+    "dwg": "",
+    "drawn_by": "",
+    "date": "2026-11-23",
+    "manual_notes": [],
+    "transitions": {
+      "slab": "raised",
+      "recess_mm": 0,
+      "no_transitions_date": null,
+      "no_ada_date": null,
+      "openings": [
+        {
+          "a": [
+            1760.28,
+            1320.6
+          ],
+          "b": [
+            1760.28,
+            1383.6
+          ],
+          "type": "ada",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            1763.28,
+            1488.72
+          ],
+          "b": [
+            1763.28,
+            1542.72
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            1763.28,
+            1571.04
+          ],
+          "b": [
+            1763.28,
+            1625.04
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            1760.28,
+            1320.42
+          ],
+          "b": [
+            1760.28,
+            1281.72
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        },
+        {
+          "a": [
+            1760.28,
+            1281.72
+          ],
+          "b": [
+            1957.2,
+            1281.72
+          ],
+          "type": "std",
+          "sides": 2,
+          "ada_width": "full",
+          "landing": false
+        }
+      ]
+    }
+  },
+  "rooms": [
+    {
+      "id": 1,
+      "name": "Room 14",
+      "number": null,
+      "included": true,
+      "area_sf": 994.1,
+      "outline_pt": [
+        [
+          1469.28,
+          950.88
+        ],
+        [
+          1952.52,
+          950.88
+        ],
+        [
+          1951.68,
+          1281.72
+        ],
+        [
+          1760.28,
+          1281.72
+        ],
+        [
+          1760.28,
+          1383.6
+        ],
+        [
+          1757.28,
+          1383.6
+        ],
+        [
+          1757.28,
+          1398.27
+        ],
+        [
+          1757.28,
+          1398.24
+        ],
+        [
+          1761.84,
+          1398.24
+        ],
+        [
+          1761.84,
+          1653.6
+        ],
+        [
+          1329.96,
+          1653.6
+        ],
+        [
+          1329.96,
+          1336.55
+        ],
+        [
+          1330.5,
+          1335.9
+        ],
+        [
+          1402.5,
+          1263.3
+        ],
+        [
+          1404.3,
+          1261.5
+        ],
+        [
+          1470.36,
+          1196.96
+        ]
+      ],
+      "holes_pt": [],
+      "layers": [
+        {
+          "code": "FIT30"
+        }
+      ],
+      "finish_adhesive_by_pliteq": false
+    },
+    {
+      "id": 2,
+      "name": "Room 15",
+      "number": null,
+      "included": true,
+      "area_sf": 65.8,
+      "outline_pt": [
+        [
+          1760.28,
+          1383.6
+        ],
+        [
+          1773.81,
+          1383.6
+        ],
+        [
+          1773.81,
+          1383.6
+        ],
+        [
+          1773.36,
+          1390.56
+        ],
+        [
+          1952.52,
+          1390.56
+        ],
+        [
+          1952.52,
+          1386.96
+        ],
+        [
+          1957.2,
+          1386.96
+        ],
+        [
+          1957.2,
+          1281.72
+        ],
+        [
+          1760.28,
+          1281.72
+        ]
+      ],
+      "holes_pt": [],
+      "layers": [
+        {
+          "code": "FIT08"
+        }
+      ],
+      "finish_adhesive_by_pliteq": false
+    }
+  ]
+}
