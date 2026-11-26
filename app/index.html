@@ -1716,7 +1716,7 @@ $("date").value=new Date().toISOString().slice(0,10);
 
 function renderAll(){ renderPop(); renderOverlay(); renderList(); renderSteps(); renderAccess(); renderTakeoff(); }
 function netSf(){ const inc=S.rooms.filter(r=>r.include); return (inc.length&&S.pxPerFt) ? inc.reduce((s,r)=>s+sf(roomArea(r)),0) : null; }
-function buKey(r){ return (r.layers||[]).filter(l=>l.code).map(l=>l.code+(isCustom(l)?"["+(l.label||"")+"|"+l.thickness_mm+"]":"")+(l.bond?":"+l.bond:"")+(l.colour?"|"+l.colour:"")).join("/"); }
+function buKey(r){ return (r.layers||[]).filter(l=>l.code).map(l=>l.code+(isCustom(l)?"["+(l.label||"")+"|"+l.thickness_mm+"]":thickIn(l)&&l.thickness_mm!=null&&l.thickness_mm!==""?"["+l.thickness_mm+"]":"")+(l.bond?":"+l.bond:"")+(l.colour?"|"+l.colour:"")).join("/"); }
 function buColor(r){
   // each distinct buildup gets its own colour (in the order they appear); rooms without one stay orange
   const pal=["#E59A0B","#2E9E5B","#8E44AD","#1F78B4","#D0453A","#00838F","#6D4C41"];
@@ -1726,6 +1726,7 @@ function buColor(r){
 }
 function prod(code){ return S.products.find(p=>p.code===code); }
 function isCustom(l){ return !!l && l.code==="CUSTOM"; }
+function thickIn(l){ const p=l&&prod(l.code); return isCustom(l) || !!(p&&p.thickness_input); }   // thickness typed per room
 function layerOk(l){ return !!l.code && (!isCustom(l) || (!!(l.label||"").trim() && l.thickness_mm!=null && l.thickness_mm!=="" && +l.thickness_mm>=0)); }
 function layersDone(r){ return (r.layers||[]).length>0 && r.layers.every(layerOk); }
 function incRooms(){ return S.rooms.filter(r=>r.include); }
@@ -1840,7 +1841,7 @@ function roomsPayload(){
     outline_pt:r.pts.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)]),
     holes_pt:(r.holes||[]).map(h=>h.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)])),
     layers:(r.layers||[]).map(l=>({code:l.code, ...(l.bond?{bond:l.bond}:{}), ...(l.colour?{colour:l.colour}:{}),
-      ...(isCustom(l)?{label:(l.label||"").trim(), thickness_mm:l.thickness_mm}:{})})), finish_adhesive_by_pliteq:!!r.finishByPliteq}));
+      ...(isCustom(l)?{label:(l.label||"").trim()}:{}), ...(thickIn(l)&&l.thickness_mm!=null&&l.thickness_mm!==""?{thickness_mm:l.thickness_mm}:{})})), finish_adhesive_by_pliteq:!!r.finishByPliteq}));
 }
 $("buildBtn").onclick=async()=>{
   if(!$("project").value.trim()){ $("project").focus(); flash("Enter a project name for the title block."); return; }
@@ -1913,7 +1914,7 @@ function renderSteps(){
 }
 function sf2(r){ return S.pxPerFt ? sf(roomArea(r)) : null; }
 function heightText(r){
-  let mm=0, unknown=false; for(const l of r.layers||[]){ const p=prod(l.code); if(!p) continue; const t=isCustom(l)?(l.thickness_mm===""||l.thickness_mm==null?null:+l.thickness_mm):p.thickness_mm; if(t==null) unknown=true; else mm+=t; }
+  let mm=0, unknown=false; for(const l of r.layers||[]){ const p=prod(l.code); if(!p) continue; const t=thickIn(l)?(l.thickness_mm===""||l.thickness_mm==null?null:+l.thickness_mm):p.thickness_mm; if(t==null) unknown=true; else mm+=t; }
   if(!mm) return ""; const inch=mm/25.4;
   return `Total height ${Math.round(mm*10)/10} mm (${Math.round(inch*8)/8}″)${unknown?" + layers without a thickness":""}`;
 }
@@ -1964,7 +1965,7 @@ function renderBuild(){
       const row=document.createElement("div"); row.className="layer";
       const num=document.createElement("span"); num.className="lnum"; num.textContent=k+1;
       num.title = k===0 ? "Top layer" : (k===r.layers.length-1 ? "Bottom layer (on the slab)" : `Layer ${k+1}`);
-      const sel=productSelect(l.code); sel.onchange=()=>{ l.code=sel.value; delete l.bond; if(!isCustom(l)){ delete l.label; delete l.thickness_mm; } renderAll(); };
+      const sel=productSelect(l.code); sel.onchange=()=>{ l.code=sel.value; delete l.bond; if(!isCustom(l)) delete l.label; if(!thickIn(l)) delete l.thickness_mm; renderAll(); };
       const p=prod(l.code);
       const bond=document.createElement("select"); bond.className="bond"; bond.title="How this layer attaches to the layer below";
       bond.innerHTML='<option value="glued">glued</option><option value="loose">loose</option>';
@@ -1988,10 +1989,11 @@ function renderBuild(){
       const sp=document.createElement("span"); sp.className="sp";
       sub.append(bond, colour, info, sp, btns);
       row.append(num, sel);
-      if(isCustom(l)){                              // label and thickness typed in
+      if(thickIn(l)){                               // thickness (and a custom layer's label) typed in
         const cu=document.createElement("div"); cu.className="lsub";
         const nm=document.createElement("input"); nm.type="text"; nm.placeholder="Label, as it prints on the sheet"; nm.value=l.label||""; nm.style.flex="1"; nm.setAttribute("aria-label","Custom layer label");
-        const th=document.createElement("input"); th.type="number"; th.min="0"; th.step="0.1"; th.placeholder="mm"; th.value=l.thickness_mm??""; th.style.width="56px"; th.setAttribute("aria-label","Custom layer thickness in mm");
+        if(!isCustom(l)){ nm.hidden=true; const tl=document.createElement("span"); tl.textContent="Thickness"; tl.style.flex="1"; cu.appendChild(tl); }
+        const th=document.createElement("input"); th.type="number"; th.min="0"; th.step="0.1"; th.placeholder="mm"; th.value=l.thickness_mm??""; th.style.width="56px"; th.setAttribute("aria-label",isCustom(l)?"Custom layer thickness in mm":"Thickness in mm");
         const u=document.createElement("span"); u.textContent="mm";
         nm.oninput=()=>{ l.label=nm.value; }; nm.onchange=()=>renderAll();
         th.oninput=()=>{ l.thickness_mm=th.value===""?null:+th.value; }; th.onchange=()=>renderAll();
@@ -2087,7 +2089,7 @@ $("importFile").onchange=async e=>{
       $("scaleSel").value=opt?opt.value:"cal"; updateScale();
     }
     S.rooms=(data.rooms||[]).map(r=>({id:r.id, name:r.name||`Room ${r.id}`, number:r.number||null, include:!!r.included,
-      pts:r.outline_pt.map(p=>[p[0]*R,p[1]*R]), holes:(r.holes_pt||[]).map(h=>h.map(p=>[p[0]*R,p[1]*R])), layers:(r.layers||[]).map(l=>({...l, ...(String(l.code||"").startsWith("CUSTOM:")?{code:"CUSTOM"}:{})})), finishByPliteq:!!r.finish_adhesive_by_pliteq, source:"auto", comp:null}));
+      pts:r.outline_pt.map(p=>[p[0]*R,p[1]*R]), holes:(r.holes_pt||[]).map(h=>h.map(p=>[p[0]*R,p[1]*R])), layers:(r.layers||[]).map(l=>({...l, ...(String(l.code||"").includes(":")?{code:String(l.code).split(":")[0]}:{})})), finishByPliteq:!!r.finish_adhesive_by_pliteq, source:"auto", comp:null}));
     S.manualOn=new Set(((data.takeoff||{}).manual_notes)||[]); renderManualNotes();
     S.finalized=S.rooms.some(r=>r.include); S.buIndex=0; S.step=S.finalized?(S.rooms.filter(r=>r.include).every(layersDone)?"sheet":"buildup"):"rooms";
     S.barriers=(data.barriers_pt||[]).map(b=>[[b[0][0]*R,b[0][1]*R],[b[1][0]*R,b[1][1]*R]]);

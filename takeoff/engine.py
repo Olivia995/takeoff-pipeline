@@ -181,6 +181,7 @@ def selectable(cat):
                     "group": FAMILY_LABELS.get(p["family"], p["family"]), "unit": p["unit"],
                     "unit_size": p.get("unit_size"), "thickness_mm": p.get("thickness_mm"),
                     "bond": p.get("bond", "glued"), "in_bom": p.get("in_bom", True),
+                    "thickness_input": bool(p.get("thickness_input")),
                     "components": p.get("components")})
     return out
 
@@ -225,13 +226,27 @@ def _custom_layers(cat, rooms):
     callout, buildup height, grouping and ramps treat it like any product: written as typed,
     never in the BOM, never hatched."""
     P = cat["products"]
-    base = P.get("CUSTOM")
-    if not base:
-        return
     for r in rooms:
         for l in r.get("layers") or []:
-            if l.get("code") != "CUSTOM" and not str(l.get("code", "")).startswith("CUSTOM:"):
+            code = str(l.get("code", "")).split(":")[0]
+            base = P.get(code)
+            if base and base.get("thickness_input") and code != "CUSTOM":
+                # a typed thickness for this room (Concrete Topping); blank = unknown, as before
+                t = l.get("thickness_mm")
+                try:
+                    mm = float(t) if t not in (None, "") else None
+                except (TypeError, ValueError):
+                    mm = None
+                if mm is None or mm < 0:
+                    l["code"] = code
+                    continue
+                key = f"{code}:{mm:g}"
+                P.setdefault(key, dict(base, code=key, thickness_mm=mm))
+                l["code"] = key
                 continue
+            if code != "CUSTOM" or "CUSTOM" not in P:
+                continue
+            base = P["CUSTOM"]
             label = (l.get("label") or "").strip()
             if not label:
                 raise TakeoffError(f"{r.get('name') or 'A room'}: give the custom layer a label.")

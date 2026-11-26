@@ -145,7 +145,8 @@ products:
   - {code: PLY12, display: '½" Plywood', family: plywood, unit: panel, unit_size: null, thickness_mm: 12.7, adhesive: none, bond: loose, in_bom: false}  # "2x ½\" Plywood" over FF70 (Econofitness, Laurels, Princess Margaret)
   - {code: PLY, display: '¾" Plywood', family: plywood, unit: panel, unit_size: null, thickness_mm: 19.05, adhesive: none, bond: loose, in_bom: false}
   # Concrete topping poured over FF: never in the BOM; FF under concrete needs perimeter isolation.
-  - {code: CONCRETE, display: Concrete Topping, family: concrete, unit: panel, unit_size: null, thickness_mm: null, adhesive: none, bond: loose, in_bom: false}
+  # thickness_input: the thickness is typed in per room in the buildup step (it varies by job).
+  - {code: CONCRETE, display: Concrete Topping, family: concrete, unit: panel, unit_size: null, thickness_mm: null, thickness_input: true, adhesive: none, bond: loose, in_bom: false}
   # Custom layer: any material, with the label and thickness typed in the buildup step. Never in
   # the BOM and never hatched (the sheet hatches the top-most Pliteq layer); it counts toward the
   # buildup height and is written in the callout as typed.
