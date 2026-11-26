@@ -501,6 +501,162 @@ def _dist_box(p, b):
     return math.hypot(dx, dy)
 
 
+def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, frame, notes_top,
+                 bom_box, turn, col_scale, ppf):
+    """The plan drawn as large as the sheet allows, turned whichever way suits it, with each
+    callout in open space near what it points at (as the drafters lay the sheets out).
+    Returns (quarter turns, target rect, scale, clip, pad, [(tip, lines, spot, which)]) when
+    that draws the plan at least 8% bigger than with a callout column, else None."""
+    import numpy as np
+    full = pymupdf.Rect(frame.x0 + 12, frame.y0 + 10, frame.x1 - 12, notes_top - 6)
+    # what each callout points at, in plan coordinates
+    wants = []
+    for x, kind, poly in shapes:
+        key = "landing" if kind == "landing" else x.get("label_" + kind.replace("-", "_"), x["label_std"])
+        for lab in ramp_labels:
+            if lab["key"] == key:
+                c = (sum(q[0] for q in poly) / len(poly), sum(q[1] for q in poly) / len(poly))
+                hit = next((w for w in wants if w[0] == key), None)
+                if hit:
+                    hit[2].append(c)
+                else:
+                    wants.append([key, lab["text"].split("\n"), [c], None])
+    for g in sorted(groups, key=lambda g: -sum(r.get("area_sf") or 0 for r in rooms if r.get("_key") == g["key"])):
+        rs = [r for r in rooms if r.get("_key") == g["key"]]
+        if rs:
+            big = max(rs, key=lambda r: r.get("area_sf") or 0)
+            wants.append([g["key"], g["callout"].split("\n"), [label_point(big["outline_pt"])], big])
+    sizes = [(max(fonts.width(l, cs) for l in lines), len(lines) * cpitch) for _k, lines, _t, _r in wants]
+    W, H = int(math.ceil(frame.x1)) + 2, int(math.ceil(frame.y1)) + 2
+
+    def crosses(p1, p2, q1, q2):
+        def o(a, b, c):
+            return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        return o(p1, p2, q1) * o(p1, p2, q2) < 0 and o(q1, q2, p1) * o(q1, q2, p2) < 0
+
+    def place(k, target, s, clip):
+        def tx(p):
+            q = turn(p, k)
+            return (target.x0 + (q[0] - clip.x0) * s, target.y0 + (q[1] - clip.y0) * s)
+        # where callouts can't go: rooms, ramps, the BOM, outside the frame, the notes
+        doc = pymupdf.open()
+        pg = doc.new_page(width=W, height=H)
+        for poly in polys + [sp[2] for sp in shapes]:
+            pg.draw_polyline([tx(q) for q in poly], color=(0, 0, 0), fill=(0, 0, 0), width=1.5, closePath=True)
+        busy = np.frombuffer(pg.get_pixmap(colorspace=pymupdf.csGRAY, alpha=False).samples, np.uint8)
+        busy = (busy.reshape(-1, W)[:H] < 128).astype(np.int32) if busy.size >= W * H else None
+        if busy is None:
+            return None
+        busy[:, :int(frame.x0 + 8)] = 1
+        busy[:, int(frame.x1 - 8):] = 1
+        busy[:int(frame.y0 + 8), :] = 1
+        busy[int(notes_top - 2):, :] = 1
+        busy[:int(bom_box.y1 + 2), :int(bom_box.x1 + 2)] = 1
+        texts, legs, out = [], [], []
+        for (key, lines, tips, room), (w, h) in zip(wants, sizes):
+            ii = np.zeros((H + 1, W + 1), np.int64)
+            ii[1:, 1:] = busy.cumsum(0).cumsum(1)
+            M = 7                                        # clear of the outlines all round
+            pw, ph = int(w + 2 * M), int(h + 2 * M)
+            if pw >= W or ph >= H:
+                return None
+            sums = ii[ph:, pw:] - ii[:-ph, pw:] - ii[ph:, :-pw] + ii[:-ph, :-pw]
+            ys, xs = np.nonzero(sums[::2, ::2] == 0)
+            if not len(xs):
+                return None
+            X, Y = xs * 2 + float(M), ys * 2 + float(M)  # the text's top-left
+            ptips = [tx(t) for t in tips]
+            if room is not None:                         # or anywhere well inside the room (short leaders)
+                poly = [tx(q) for q in room["outline_pt"]]
+                holes = [[tx(q) for q in h_] for h_ in room.get("holes_pt") or []]
+                bx = bbox(poly)
+                step = max(12.0, max(bx[2] - bx[0], bx[3] - bx[1]) / 14)
+
+                def clear(px, py):
+                    best_ = 1e9
+                    for ring in [poly] + holes:
+                        for i in range(len(ring)):
+                            a_, b_ = ring[i - 1], ring[i]
+                            dx, dy = b_[0] - a_[0], b_[1] - a_[1]
+                            t = max(0.0, min(1.0, ((px - a_[0]) * dx + (py - a_[1]) * dy) / ((dx * dx + dy * dy) or 1e-9)))
+                            best_ = min(best_, math.hypot(a_[0] + dx * t - px, a_[1] + dy * t - py))
+                    return best_
+                yy = bx[1] + step / 2
+                while yy < bx[3]:
+                    xx = bx[0] + step / 2
+                    while xx < bx[2]:
+                        if point_in_polygon(xx, yy, poly) and not any(point_in_polygon(xx, yy, h_) for h_ in holes) \
+                                and clear(xx, yy) >= 14:
+                            ptips.append((xx, yy))
+                        xx += step
+                    yy += step
+            best = None
+            for tp in ptips:
+                for which in ("left", "right"):          # text left (leader from its right end) or right of the tip
+                    sx = X + w + 4 if which == "left" else X - 4
+                    ex = sx + 22 if which == "left" else sx - 22
+                    sy = Y + cs * 0.5
+                    ok = (ex <= tp[0] + 4) if which == "left" else (ex >= tp[0] - 4)
+                    cost = 22 + np.hypot(tp[0] - ex, tp[1] - sy) + np.where(ok, 0, 1e9)
+                    order = np.argsort(cost)[:300]
+                    for i in order:
+                        if cost[i] >= 1e8 or (best and cost[i] >= best[0]):
+                            break
+                        leg = ((sx[i], sy[i]), (ex[i], sy[i]), tp)
+                        # leaders don't run through other callouts or cross other leaders
+                        if any(r.intersects(pymupdf.Rect(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]) + .1, max(a[1], b[1]) + .1))
+                               and any(r.contains(pymupdf.Point(a[0] + (b[0] - a[0]) * t / 20, a[1] + (b[1] - a[1]) * t / 20))
+                                       for t in range(21))
+                               for r in texts for a, b in ((leg[0], leg[1]), (leg[1], leg[2]))):
+                            continue
+                        if any(crosses(a, b, c, d) for L in legs for a, b in ((L[0], L[1]), (L[1], L[2]))
+                               for c, d in ((leg[0], leg[1]), (leg[1], leg[2]))):
+                            continue
+                        best = (cost[i], pymupdf.Rect(X[i], Y[i], X[i] + w, Y[i] + h), which, leg, tp)
+                        break
+            if not best or best[0] > 0.33 * (frame.x1 - frame.x0):
+                return None
+            _c, spot, which, leg, tp = best
+            texts.append(spot + (-3, -3, 3, 3))
+            legs.append(leg)
+            busy[max(0, int(spot.y0 - 4)):int(spot.y1 + 5), max(0, int(spot.x0 - 6)):int(spot.x1 + 7)] = 1
+            out.append((pymupdf.Point(*tp), lines, spot, which))
+        return out
+
+    found = None
+    for k in range(4):
+        pts = [turn(q, k) for poly in polys + [sp[2] for sp in shapes] for q in poly]
+        x0, y0, x1, y1 = bbox(pts)
+        pad = max(x1 - x0, y1 - y0) * 0.03 + 4
+        clip = pymupdf.Rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+        s_full = min(full.width / clip.width, full.height / clip.height)
+        floor_ = max(col_scale * 1.08, found[2] * 1.02 if found else 0)
+        f = 1.0
+        while s_full * f >= floor_:
+            s = s_full * f
+            w, h = clip.width * s, clip.height * s
+            done = None
+            for ax in (1.0, 0.5, 0.0):
+                for ay in (1.0, 0.5):
+                    tl = (full.x0 + (full.width - w) * ax, full.y0 + (full.height - h) * ay)
+                    target = pymupdf.Rect(tl[0], tl[1], tl[0] + w, tl[1] + h)
+                    if target.intersects(bom_box) and _hits(bom_box, [[(target.x0 + (turn(q, k)[0] - clip.x0) * s,
+                                                                         target.y0 + (turn(q, k)[1] - clip.y0) * s)
+                                                                        for q in poly] for poly in polys]):
+                        continue
+                    got = place(k, target, s, clip)
+                    if got:
+                        done = (k, target, s, clip, pad, got)
+                        break
+                if done:
+                    break
+            if done:
+                found = done
+                break
+            f -= 0.04
+    return found
+
+
 def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, catalog):
     """Write the takeoff sheet PDF.
 
@@ -558,8 +714,17 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
             shapes += [(x, k, poly) for k, poly in ramp_shapes(x, ppf, room)]
     # The plan is drawn as is, or turned a quarter turn (clockwise) when that draws it larger:
     # a tall room on this landscape sheet fills the space, and the leaders get shorter.
-    def turn(p, rot):
-        return (-p[1], p[0]) if rot else (p[0], p[1])
+    def turn(p, k):                               # k quarter turns clockwise
+        x_, y_ = p
+        for _ in range(int(k) % 4):
+            x_, y_ = -y_, x_
+        return (x_, y_)
+
+    def unturn(p, k):
+        x_, y_ = p
+        for _ in range(int(k) % 4):
+            x_, y_ = y_, -x_
+        return (x_, y_)
     turned_polys = []
 
     def layout(rot):
@@ -602,13 +767,21 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
             best = own
         return best[:3] + (best[3], clip, pad)
 
-    plain, turned = layout(False), layout(True)
-    rot = turned[1] > plain[1] * 1.08            # turn when it draws the plan noticeably bigger (Maroon Creek: 13%)
+    plain, turned = layout(0), layout(1)
+    rot = 1 if turned[1] > plain[1] * 1.08 else 0   # turn when it draws the plan noticeably bigger (Maroon Creek: 13%)
     target, s, side, area, clip, pad = turned if rot else plain
     # the drawing goes to the right of the page (as on the drafted sheets); callouts sit just
     # beside it, so the leaders are short
     if "right" not in side.values() or "left" not in side.values():
         target = target + (area.x1 - target.x1, 0, area.x1 - target.x1, 0)
+
+    # As the drafters do: no column kept for the callouts, they go in the open space around the
+    # rooms (beside the BOM, in a notch of the plan), and the plan may be turned any way round.
+    # Used whenever it draws the plan noticeably bigger and every callout finds a spot.
+    free = _free_layout(polys, shapes, rooms, takeoff.groups, ramp_labels, fonts, cs, cpitch, frame,
+                        notes_top, bom_box, turn, s, ppf)
+    if free:
+        rot, target, s, clip, pad, free = free
 
     x0, y0, x1, y1 = bbox([q for poly in polys for q in poly])     # plan coordinates (hatch origin)
 
@@ -628,10 +801,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
             moves.setdefault(d, []).append(orig)
         for (dx, dy), rs in moves.items():
             if len(moves) == 1:                   # the whole drawn area, back in plan coordinates
-                if rot:                           # undo the quarter turn: (x, y) -> (y, -x)
-                    corners = [(q[1], -q[0]) for q in ((clip.x0, clip.y0), (clip.x1, clip.y1))]
-                else:
-                    corners = [(clip.x0, clip.y0), (clip.x1, clip.y1)]
+                corners = [unturn(q, rot) for q in ((clip.x0, clip.y0), (clip.x1, clip.y1))]
                 xs, ys = [q[0] - dx for q in corners], [q[1] - dy for q in corners]
                 src = pymupdf.Rect(min(xs), min(ys), max(xs), max(ys))
             else:
@@ -642,7 +812,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
                 continue
             cs_ = [tx((src.x0 + dx, src.y0 + dy)), tx((src.x1 + dx, src.y1 + dy))]
             dest = pymupdf.Rect(min(c.x for c in cs_), min(c.y for c in cs_), max(c.x for c in cs_), max(c.y for c in cs_))
-            page.show_pdf_page(dest, plan_doc, page_no - 1, clip=src, rotate=-90 if rot else 0)
+            page.show_pdf_page(dest, plan_doc, page_no - 1, clip=src, rotate=(-90 * rot) % 360)
             page.draw_rect(dest, color=None, fill=(1, 1, 1), fill_opacity=0.7, width=0)
     except Exception:                             # a plan that can't be placed: rooms only, as before
         pass
@@ -685,7 +855,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
                 unit = (top.get("hatch_scale") or 1) * ppf / 12
                 fams = PATTERNS[top["hatch_pattern"].upper()]
                 if 0.25 * unit * s > 1.2:
-                    segs = _pattern_segments(rings, fams, unit, 0 if rot else 90, (x0, y0))
+                    segs = _pattern_segments(rings, fams, unit, 0 if rot % 2 else 90, (x0, y0))
             elif kind in ("diagonal", "rows"):
                 spacing = (DIAGONAL_FT if kind == "diagonal" else ROW_FT) * ppf
                 if spacing * s > 1.2:
@@ -743,7 +913,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
 
     # ---- one callout per buildup in the right-hand column, ordered like the rooms they point to
     items = []
-    for g in buildups:
+    for g in (buildups if not free else []):
         rs = sys_rooms[g["key"]]
         if not rs:
             continue
@@ -780,7 +950,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
         items.append((tip, g["callout"].split("\n"), which))
     cx = target.x0 + (clip.x0 + clip.width / 2 - clip.x0) * s
     left_ok = "left" in side.values()
-    for lab in ramp_labels:
+    for lab in (ramp_labels if not free else []):
         cands = tips.get(lab["key"])
         if cands:
             only_left = "right" not in side.values()
@@ -841,6 +1011,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
                 if sc < score:
                     best, score = these, sc
         placed += best
+    spots = []
     for tip, lines, cw, ch, yc, which in placed:
         # callouts sit just beside the drawing (not out at the border), so leaders stay short
         if which == "left":
@@ -849,6 +1020,10 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
         else:
             x0 = min(frame.x1 - 12 - cw, target.x1 + 34)
             spot = pymupdf.Rect(x0, yc - ch / 2, x0 + cw, yc + ch / 2)
+        spots.append((tip, lines, spot, which))
+    for tip, lines, spot, which in (free or spots):
+        if free:                                  # over the faded plan: keep the words readable
+            page.draw_rect(spot + (-2, -1, 2, 1), color=None, fill=(1, 1, 1), width=0)
         for i, l in enumerate(lines):
             # like the template's leaders: left-side callouts are right-aligned against their leader
             lx = spot.x1 - fonts.width(l, cs) if which == "left" else spot.x0
