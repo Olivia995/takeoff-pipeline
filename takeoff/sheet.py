@@ -187,7 +187,7 @@ def _pattern_segments(groups, families, unit, angle, origin):
 
 
 TILE_GRID_FAMILIES = ("fit_tile", "xfit")
-NOT_PLITEQ = ("finished_floor", "plywood", "pmi", "concrete")
+NOT_PLITEQ = ("finished_floor", "plywood", "pmi", "concrete", "custom")
 DIAGONAL_FT = 4.0        # ANSI31 at scale 384 = lines 48" apart
 ROW_FAMILIES = ("rst", "ff", "ff_panel")
 ROW_FT = 4.0             # horizontal rows for RST / FF

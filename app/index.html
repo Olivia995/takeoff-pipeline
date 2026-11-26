@@ -1716,7 +1716,7 @@ $("date").value=new Date().toISOString().slice(0,10);
 
 function renderAll(){ renderPop(); renderOverlay(); renderList(); renderSteps(); renderAccess(); renderTakeoff(); }
 function netSf(){ const inc=S.rooms.filter(r=>r.include); return (inc.length&&S.pxPerFt) ? inc.reduce((s,r)=>s+sf(roomArea(r)),0) : null; }
-function buKey(r){ return (r.layers||[]).filter(l=>l.code).map(l=>l.code+(l.bond?":"+l.bond:"")+(l.colour?"|"+l.colour:"")).join("/"); }
+function buKey(r){ return (r.layers||[]).filter(l=>l.code).map(l=>l.code+(isCustom(l)?"["+(l.label||"")+"|"+l.thickness_mm+"]":"")+(l.bond?":"+l.bond:"")+(l.colour?"|"+l.colour:"")).join("/"); }
 function buColor(r){
   // each distinct buildup gets its own colour (in the order they appear); rooms without one stay orange
   const pal=["#E59A0B","#2E9E5B","#8E44AD","#1F78B4","#D0453A","#00838F","#6D4C41"];
@@ -1725,7 +1725,9 @@ function buColor(r){
   return pal[Math.max(0,keys.indexOf(k))%pal.length];
 }
 function prod(code){ return S.products.find(p=>p.code===code); }
-function layersDone(r){ return (r.layers||[]).length>0 && r.layers.every(l=>l.code); }
+function isCustom(l){ return !!l && l.code==="CUSTOM"; }
+function layerOk(l){ return !!l.code && (!isCustom(l) || (!!(l.label||"").trim() && l.thickness_mm!=null && l.thickness_mm!=="" && +l.thickness_mm>=0)); }
+function layersDone(r){ return (r.layers||[]).length>0 && r.layers.every(layerOk); }
 function incRooms(){ return S.rooms.filter(r=>r.include); }
 function transitionsPayload(){
   const R=S.renderScale;
@@ -1814,7 +1816,7 @@ function renderTakeoff(){
   tkTimer=setTimeout(async()=>{
     const seq=++tkSeq;
     try{
-      const d=await api("/api/takeoff",{...takeoffParams(), rooms:roomsPayload().filter((r,i)=>r.included && r.layers.length && r.layers.every(l=>l.code))});
+      const d=await api("/api/takeoff",{...takeoffParams(), rooms:roomsPayload().filter((r,i)=>r.included && r.layers.length && r.layers.every(layerOk))});
       if(seq!==tkSeq) return;
       S.lastLines=d.lines; S.rampInfo=d.ramps||[]; renderAccess(); renderOverlay();
       const left=all.length-ready.length;
@@ -1837,7 +1839,8 @@ function roomsPayload(){
   return S.rooms.map(r=>({name:r.name, number:r.number||null, included:!!r.include,
     outline_pt:r.pts.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)]),
     holes_pt:(r.holes||[]).map(h=>h.map(p=>[+(p[0]/R).toFixed(2), +(p[1]/R).toFixed(2)])),
-    layers:(r.layers||[]).map(l=>({code:l.code, ...(l.bond?{bond:l.bond}:{}), ...(l.colour?{colour:l.colour}:{})})), finish_adhesive_by_pliteq:!!r.finishByPliteq}));
+    layers:(r.layers||[]).map(l=>({code:l.code, ...(l.bond?{bond:l.bond}:{}), ...(l.colour?{colour:l.colour}:{}),
+      ...(isCustom(l)?{label:(l.label||"").trim(), thickness_mm:l.thickness_mm}:{})})), finish_adhesive_by_pliteq:!!r.finishByPliteq}));
 }
 $("buildBtn").onclick=async()=>{
   if(!$("project").value.trim()){ $("project").focus(); flash("Enter a project name for the title block."); return; }
@@ -1910,12 +1913,12 @@ function renderSteps(){
 }
 function sf2(r){ return S.pxPerFt ? sf(roomArea(r)) : null; }
 function heightText(r){
-  let mm=0, unknown=false; for(const l of r.layers||[]){ const p=prod(l.code); if(!p) continue; if(p.thickness_mm==null) unknown=true; else mm+=p.thickness_mm; }
+  let mm=0, unknown=false; for(const l of r.layers||[]){ const p=prod(l.code); if(!p) continue; const t=isCustom(l)?(l.thickness_mm===""||l.thickness_mm==null?null:+l.thickness_mm):p.thickness_mm; if(t==null) unknown=true; else mm+=t; }
   if(!mm) return ""; const inch=mm/25.4;
   return `Total height ${Math.round(mm*10)/10} mm (${Math.round(inch*8)/8}″)${unknown?" + layers without a thickness":""}`;
 }
 function layerSummary(r){
-  const ls=(r.layers||[]).filter(l=>l.code).map(l=>(prod(l.code)||{display:l.code}).display.replace(/^GenieMat /,"")+(l.colour?` (Colour ${l.colour})`:""));
+  const ls=(r.layers||[]).filter(l=>l.code).map(l=>(isCustom(l)?((l.label||"").trim()||"Custom layer"):(prod(l.code)||{display:l.code}).display.replace(/^GenieMat /,""))+(l.colour?` (Colour ${l.colour})`:""));
   return ls.length ? ls.join(" over ") : "needs a buildup";
 }
 function productSelect(value){
@@ -1961,7 +1964,7 @@ function renderBuild(){
       const row=document.createElement("div"); row.className="layer";
       const num=document.createElement("span"); num.className="lnum"; num.textContent=k+1;
       num.title = k===0 ? "Top layer" : (k===r.layers.length-1 ? "Bottom layer (on the slab)" : `Layer ${k+1}`);
-      const sel=productSelect(l.code); sel.onchange=()=>{ l.code=sel.value; delete l.bond; renderAll(); };
+      const sel=productSelect(l.code); sel.onchange=()=>{ l.code=sel.value; delete l.bond; if(!isCustom(l)){ delete l.label; delete l.thickness_mm; } renderAll(); };
       const p=prod(l.code);
       const bond=document.createElement("select"); bond.className="bond"; bond.title="How this layer attaches to the layer below";
       bond.innerHTML='<option value="glued">glued</option><option value="loose">loose</option>';
@@ -1980,11 +1983,21 @@ function renderBuild(){
         mk("✕","Remove layer",()=>{ r.layers.splice(k,1); if(!r.layers.length) r.layers=[{code:""}]; renderAll(); }));
       const sub=document.createElement("div"); sub.className="lsub";
       const info=document.createElement("span");
-      info.textContent = !p ? "" : p.components ? p.components.map(c=>(prod(c)||{display:c}).display.replace("GenieMat ","")).join(" on ")
+      info.textContent = !p ? "" : isCustom(l) ? "not in the BOM, not hatched" : p.components ? p.components.map(c=>(prod(c)||{display:c}).display.replace("GenieMat ","")).join(" on ")
         : (p.unit_size ? `${p.unit_size} ${p.unit==="lf_roll"?"LF":"SF"} per ${p.unit==="lf_roll"?"roll":p.unit}` : "not supplied by Pliteq");
       const sp=document.createElement("span"); sp.className="sp";
       sub.append(bond, colour, info, sp, btns);
-      row.append(num, sel, sub); stack.appendChild(row);
+      row.append(num, sel);
+      if(isCustom(l)){                              // label and thickness typed in
+        const cu=document.createElement("div"); cu.className="lsub";
+        const nm=document.createElement("input"); nm.type="text"; nm.placeholder="Label, as it prints on the sheet"; nm.value=l.label||""; nm.style.flex="1"; nm.setAttribute("aria-label","Custom layer label");
+        const th=document.createElement("input"); th.type="number"; th.min="0"; th.step="0.1"; th.placeholder="mm"; th.value=l.thickness_mm??""; th.style.width="56px"; th.setAttribute("aria-label","Custom layer thickness in mm");
+        const u=document.createElement("span"); u.textContent="mm";
+        nm.oninput=()=>{ l.label=nm.value; }; nm.onchange=()=>renderAll();
+        th.oninput=()=>{ l.thickness_mm=th.value===""?null:+th.value; }; th.onchange=()=>renderAll();
+        cu.append(nm, th, u); row.appendChild(cu);
+      }
+      row.appendChild(sub); stack.appendChild(row);
     });
     const add=document.createElement("button"); add.className="addlayer"; add.textContent="+ Add layer below";
     add.onclick=()=>{ r.layers.push({code:""}); renderAll(); };
@@ -2074,7 +2087,7 @@ $("importFile").onchange=async e=>{
       $("scaleSel").value=opt?opt.value:"cal"; updateScale();
     }
     S.rooms=(data.rooms||[]).map(r=>({id:r.id, name:r.name||`Room ${r.id}`, number:r.number||null, include:!!r.included,
-      pts:r.outline_pt.map(p=>[p[0]*R,p[1]*R]), holes:(r.holes_pt||[]).map(h=>h.map(p=>[p[0]*R,p[1]*R])), layers:(r.layers||[]).map(l=>({...l})), finishByPliteq:!!r.finish_adhesive_by_pliteq, source:"auto", comp:null}));
+      pts:r.outline_pt.map(p=>[p[0]*R,p[1]*R]), holes:(r.holes_pt||[]).map(h=>h.map(p=>[p[0]*R,p[1]*R])), layers:(r.layers||[]).map(l=>({...l, ...(String(l.code||"").startsWith("CUSTOM:")?{code:"CUSTOM"}:{})})), finishByPliteq:!!r.finish_adhesive_by_pliteq, source:"auto", comp:null}));
     S.manualOn=new Set(((data.takeoff||{}).manual_notes)||[]); renderManualNotes();
     S.finalized=S.rooms.some(r=>r.include); S.buIndex=0; S.step=S.finalized?(S.rooms.filter(r=>r.include).every(layersDone)?"sheet":"buildup"):"rooms";
     S.barriers=(data.barriers_pt||[]).map(b=>[[b[0][0]*R,b[0][1]*R],[b[1][0]*R,b[1][1]*R]]);

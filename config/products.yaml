@@ -146,6 +146,10 @@ products:
   - {code: PLY, display: '¾" Plywood', family: plywood, unit: panel, unit_size: null, thickness_mm: 19.05, adhesive: none, bond: loose, in_bom: false}
   # Concrete topping poured over FF: never in the BOM; FF under concrete needs perimeter isolation.
   - {code: CONCRETE, display: Concrete Topping, family: concrete, unit: panel, unit_size: null, thickness_mm: null, adhesive: none, bond: loose, in_bom: false}
+  # Custom layer: any material, with the label and thickness typed in the buildup step. Never in
+  # the BOM and never hatched (the sheet hatches the top-most Pliteq layer); it counts toward the
+  # buildup height and is written in the callout as typed.
+  - {code: CUSTOM, display: Custom layer, family: custom, unit: panel, unit_size: null, thickness_mm: null, adhesive: none, bond: loose, in_bom: false}
   # Finished floor: adhesive is by others unless the takeoff says Pliteq supplies it.
   - {code: FINISH, display: Finished Floor, family: finished_floor, unit: roll, unit_size: null, thickness_mm: 5, adhesive: rolled, bond: glued, in_bom: false}
   # Vinyl finished floor: glued with FAS3 (600 SF per pail) when Pliteq supplies it (290 Cole St).

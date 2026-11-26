@@ -160,7 +160,7 @@ FAMILY_LABELS = {"xfit": "xFIT", "fit_tile": "FIT tiles", "fit_roll": "FIT rolls
                  "rst": "RST / interstitial", "dh": "DH", "ff": "FF (rolled)", "ff_panel": "FF (panels)",
                  "other": "Other", "pmi": "Perimeter isolation", "plywood": "Not supplied by Pliteq",
                  "system": "Systems", "concrete": "Not supplied by Pliteq",
-                 "finished_floor": "Not supplied by Pliteq"}
+                 "finished_floor": "Not supplied by Pliteq", "custom": "Custom"}
 
 
 def _ready(cat, p):
@@ -204,7 +204,9 @@ def callout(cat, layers):
         p = cat["products"][l["code"]]
         if p["family"] == "pmi":
             continue
-        if p["family"] == "finished_floor":
+        if p["family"] == "custom":                 # written exactly as typed
+            n = p["display"]
+        elif p["family"] == "finished_floor":
             n = p["display"] + " (supplied by others)"
         elif p["family"] in ("plywood", "concrete"):
             n = p["display"] + " (supplied by others)"
@@ -218,6 +220,32 @@ def callout(cat, layers):
     return "\n".join(n + (" over" if i < len(names) - 1 else "") for i, n in enumerate(names))
 
 
+def _custom_layers(cat, rooms):
+    """A custom layer ({code: CUSTOM, label, thickness_mm}) becomes its own catalog entry, so the
+    callout, buildup height, grouping and ramps treat it like any product: written as typed,
+    never in the BOM, never hatched."""
+    P = cat["products"]
+    base = P.get("CUSTOM")
+    if not base:
+        return
+    for r in rooms:
+        for l in r.get("layers") or []:
+            if l.get("code") != "CUSTOM" and not str(l.get("code", "")).startswith("CUSTOM:"):
+                continue
+            label = (l.get("label") or "").strip()
+            if not label:
+                raise TakeoffError(f"{r.get('name') or 'A room'}: give the custom layer a label.")
+            try:
+                mm = float(l.get("thickness_mm"))
+            except (TypeError, ValueError):
+                raise TakeoffError(f"{r.get('name') or 'A room'}: give the custom layer '{label}' a thickness.")
+            if mm < 0:
+                raise TakeoffError(f"{r.get('name') or 'A room'}: the custom layer '{label}' can't be thinner than 0 mm.")
+            key = f"CUSTOM:{label}:{mm:g}"
+            P.setdefault(key, dict(base, code=key, display=label, thickness_mm=mm))
+            l["code"] = key
+
+
 def _poly_area(p):
     return abs(sum(p[i - 1][0] * p[i][1] - p[i][0] * p[i - 1][1] for i in range(len(p)))) / 2
 
@@ -229,6 +257,7 @@ def compute(cat, rooms, manual_notes=(), transitions=None, pt_per_ft=None):
     openings: [see ramps.plan]}; pt_per_ft converts the openings' PDF points to feet."""
     P, R = cat["products"], cat["rules"]
     res = Result()
+    _custom_layers(cat, rooms)
     for r in rooms:
         if not r.get("layers"):
             raise TakeoffError(f"{r.get('name') or 'A room'} has no buildup yet.")

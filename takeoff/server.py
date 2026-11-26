@@ -509,7 +509,9 @@ def api_build(_q, body):
              "takeoff": {k: body.get(k) for k in ("project", "dwg", "drawn_by", "date", "manual_notes", "transitions")},
              "rooms": [{"id": i, "name": r.get("name"), "number": r.get("number"), "included": bool(r.get("included")),
                         "area_sf": round(room_area_pt(r) / ppf ** 2, 1), "outline_pt": r["outline_pt"],
-                        "holes_pt": r.get("holes_pt") or [], "layers": r.get("layers") or [],
+                        "holes_pt": r.get("holes_pt") or [],
+                        "layers": [dict(l, code="CUSTOM") if str(l.get("code", "")).startswith("CUSTOM:") else l
+                                   for l in r.get("layers") or []],
                         "finish_adhesive_by_pliteq": bool(r.get("finish_adhesive_by_pliteq"))}
                        for i, r in enumerate(body["rooms"], 1)]}
     (out_dir / "rooms.json").write_text(json.dumps(saved, indent=2), encoding="utf-8")
