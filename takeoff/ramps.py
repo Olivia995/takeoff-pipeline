@@ -285,7 +285,7 @@ def _cross_lines(p, d, q, e):
 def _shared_pieces(edges, max_in, max_per):
     """Standard pieces needed for short edges: up to `max_per` edges can be cut from one 48"
     piece as long as together they use no more than `max_in` (87.5% of the piece = 42").
-    First fit, longest first. FIT30 ADA side wings (13", 18" rounded) go two to a piece;
+    First fit, longest first; lengths come in already rounded up to 6". FIT30 ADA side wings (13", 18" rounded) go two to a piece;
     FIT70 ones (32.5", 36" rounded) need a piece each."""
     bins = []                                    # [used inches, edge count]
     for e in sorted(edges, reverse=True):
@@ -404,11 +404,10 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             edges.append(L_in)
         if land_in:                                   # standard ramps down the sides of the landing
             edges += [land_in] * n_sides
-        # straight edges round up to the next 6"; the triangular wings beside an ADA ramp are cut
-        # to their own length, so two short ones (a trimmed ramp's) can come from one piece
-        for e, rounded in [(e, True) for e in edges * tiers] + [(w, False) for w in wings]:
-            if rounded or e > R["standard_max_share_in"]:
-                e = math.ceil(e / ROUND_IN - 1e-6) * ROUND_IN
+        # every standard length (straight edges and the wings beside an ADA ramp) rounds up to
+        # the next 6" before the sharing rule: FIT30 wings 13" -> 18", two to a piece
+        for e in edges * tiers + wings:
+            e = math.ceil(e / ROUND_IN - 1e-6) * ROUND_IN
             if e <= R["standard_max_share_in"]:
                 std_short.setdefault(series, []).append(e)
             else:
