@@ -719,10 +719,20 @@ function nearestLine(arr,c,along,tol){
   }
   return best ? best[1] : null;
 }
-function snapPt(p,e){
-  // Snap onto the drawing's own horizontal/vertical lines (Alt turns it off).
+function accEnd(p,skip){
+  // the nearest end of another transition, within a few pixels on screen
+  const tol=10/S.view.z; let best=null;
+  S.access.forEach((x,i)=>{ if(i===skip) return;
+    for(const q of [x.a,x.b]){ const d=Math.hypot(q[0]-p[0],q[1]-p[1]); if(d<tol && (!best||d<best[0])) best=[d,q]; } });
+  return best ? [best[1][0],best[1][1]] : null;
+}
+function snapPt(p,e,skip){
+  // Snap onto the end of another transition (access tool), else onto the drawing's own
+  // horizontal/vertical lines (Alt turns it off).
   S.snapMark=null;
-  if((e && e.altKey) || !S.lines.h.length) return p;
+  if(e && e.altKey) return p;
+  if(S.tool==="access" || skip!=null){ const q=accEnd(p,skip); if(q){ S.snapMark=q; return q; } }
+  if(!S.lines.h.length) return p;
   const tol=7/S.view.z;
   const x=nearestLine(S.lines.v,p[0],p[1],tol), y=nearestLine(S.lines.h,p[1],p[0],tol);
   if(x==null && y==null) return p;
@@ -945,7 +955,7 @@ const TOOL_HINTS={
   draw:"Click the room's corners: each edge is a straight line between your clicks. Corners snap to the drawing's lines. Click the first point, double-click, or press Enter to finish. Shift = square edge, Alt = free point (no snapping). Cmd/Ctrl-Z undoes the last corner. Esc cancels.",
   barrier:"Click two points across a doorway or opening to close it, then detect again. After the first click you can type a length (e.g. 3'6) and press Enter. Click a closed opening to select it; Delete removes it.",
   cal:"Click both ends of a dimension you know, then enter its length.",
-  access:"Double-click on a room's edge for a standard 42\" ADA opening there, or click both ends of an opening for a custom width. After the first click you can type a length instead (42\" or 3'6, plain numbers are feet) and press Enter. Click a transition to select it: drag its ends, type a new length, or press Delete. Cmd/Ctrl-Z undoes.",
+  access:"Double-click on a room's edge for a standard 42\" ADA opening there, or click both ends of an opening for a custom width. Ends snap to the ends of other transitions (Alt = free). After the first click you can type a length instead (42\" or 3'6, plain numbers are feet) and press Enter. Click a transition to select it: drag its ends, type a new length, or press Delete. Cmd/Ctrl-Z undoes.",
   split:"Click across the area you want to split: start at one wall, click again at the opposite wall (add clicks in between for bends), then double-click or press Enter. Points snap to the drawing; Shift keeps lines square.",
   exclude:"Click the corners of an area to leave out of the room (an irregular column, planter or casework). Double-click, Enter or click the first corner to finish. Points snap to the drawing; Shift keeps edges square; Cmd/Ctrl-Z undoes the last point.",
   round:"Click inside a round column drawn on the plan to cut it out. If it isn't drawn as a circle, click its centre, then its edge.",
@@ -1459,9 +1469,16 @@ function moveObj(o,p,e){
   const O=o.orig, dx=p[0]-o.start[0], dy=p[1]-o.start[1];
   if(o.kind==="access"){
     const x=S.access[o.i], L=Math.hypot(O.b[0]-O.a[0],O.b[1]-O.a[1])||1, u=[(O.b[0]-O.a[0])/L,(O.b[1]-O.a[1])/L];
-    if(o.end==null){ const s=dx*u[0]+dy*u[1];                // slide along its wall
+    if(o.end==null){ let s=dx*u[0]+dy*u[1];                // slide along its wall
+      S.snapMark=null;
+      if(!e.altKey){                                          // an end meeting another transition's end snaps to it
+        let best=null;
+        for(const E of [O.a,O.b]){ const m=[E[0]+u[0]*s,E[1]+u[1]*s], q=accEnd(m,o.i);
+          if(q){ const d=Math.hypot(q[0]-m[0],q[1]-m[1]); if(!best||d<best[0]) best=[d,(q[0]-m[0])*u[0]+(q[1]-m[1])*u[1],q]; } }
+        if(best){ s+=best[1]; S.snapMark=best[2]; }
+      }
       x.a=[O.a[0]+u[0]*s,O.a[1]+u[1]*s]; x.b=[O.b[0]+u[0]*s,O.b[1]+u[1]*s]; }
-    else { const q=snapPt(p,e), fix=o.end==="a"?O.b:O.a, dir=o.end==="a"?[-u[0],-u[1]]:u;   // stretch along its wall
+    else { const q=snapPt(p,e,o.i), fix=o.end==="a"?O.b:O.a, dir=o.end==="a"?[-u[0],-u[1]]:u;   // stretch along its wall
       const s=Math.max((S.pxPerFt||12)/4,(q[0]-fix[0])*dir[0]+(q[1]-fix[1])*dir[1]);
       x[o.end]=[fix[0]+dir[0]*s,fix[1]+dir[1]*s]; x.centred=false; }
     hint(`Transition ${o.i+1}: ${fmtLen(lenFt(x.a,x.b))}. Drag an end to change its length, the middle to slide it along the wall.`);
