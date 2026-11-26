@@ -335,12 +335,34 @@ def ramp_shapes(r, ppf, room=None):
         # standard run carries on from that side, its tip sits on the run's inner edge, one ramp
         # depth out (Lifetime Sky); against a bare wall it lies along the wall, a right triangle
         # one standard depth long (Cottages Cardio)
+        # A wing with the doorway's wall beside it fills to the wall: its short edge runs along
+        # the doorway line to where the wall turns away (the jamb's corner), its long edge from
+        # there back to the ADA ramp's far corner (drafted: an ADA ramp beside a slanted wall)
+        def to_wall(t, sgn):
+            if not room:
+                return None
+            tol = 0.75
+            def off(p):                           # distance off the doorway line, and along it
+                return (abs((p[0] - ax) * nx + (p[1] - ay) * ny), (p[0] - ax) * ux + (p[1] - ay) * uy)
+            reach, grew = 0.0, True
+            while grew:
+                grew = False
+                for i in range(len(room)):
+                    (d0, s0), (d1, s1) = off(room[i - 1]), off(room[i])
+                    if d0 > tol or d1 > tol:
+                        continue
+                    lo, hi = sorted(((s0 - t) * sgn, (s1 - t) * sgn))
+                    if lo <= reach + tol and hi > reach + tol:
+                        reach, grew = hi, True
+            return reach if reach > 0.5 else None
         if r.get("wing_r", sides >= 1):
             d = W[T] if r.get("std_at_b") else 0.0
-            out.append(("std", [P(t1, 0), P(t1 + W[T], d), P(t1, A[T])]))
+            s = W[T] if d else min(to_wall(t1, 1) or W[T], A[T])
+            out.append(("std", [P(t1, 0), P(t1 + s, d), P(t1, A[T])]))
         if r.get("wing_l", sides == 2):
             d = W[T] if r.get("std_at_a") else 0.0
-            out.append(("std", [P(t0, 0), P(t0 - W[T], d), P(t0, A[T])]))
+            s = W[T] if d else min(to_wall(t0, -1) or W[T], A[T])
+            out.append(("std", [P(t0, 0), P(t0 - s, d), P(t0, A[T])]))
         return out
     for k in range(T):
         kind = "std" + kinds[k]

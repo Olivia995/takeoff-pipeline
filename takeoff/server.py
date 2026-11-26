@@ -458,11 +458,15 @@ def _takeoff(body):
 def api_takeoff(_q, body):
     _cat, t, _rooms = _takeoff(body)
     from .sheet import ramp_shapes
+
+    def room_of(x):
+        i = x.get("room_index", -1)
+        return _rooms[i].get("outline_pt") if 0 <= i < len(_rooms) else None
     ppf = pt_per_ft(float(body["in_per_ft"]))
 
     def shapes(x):                                   # where the transition sits, for the editor
         try:
-            return [[k, [[round(p[0], 2), round(p[1], 2)] for p in poly]] for k, poly in ramp_shapes(x, ppf)] if x.get("a") else []
+            return [[k, [[round(p[0], 2), round(p[1], 2)] for p in poly]] for k, poly in ramp_shapes(x, ppf, room_of(x))] if x.get("a") else []
         except Exception:
             return []
     return {"lines": [ln.text() for ln in t.lines], "notes": t.notes, "note_ids": t.note_ids,
