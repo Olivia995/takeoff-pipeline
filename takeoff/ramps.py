@@ -378,6 +378,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
         # which sides of an ADA ramp get a wing: the drafter's choice, less any side where the
         # ramp ends at a corner of the room (a wing there would hang outside the room)
         wing_l, wing_r = n_sides == 2, n_sides >= 1
+        wall_a_in = wall_b_in = 0.0                  # wall beside each side of an ADA ramp, from the doorway
         if ada and "a" in o and rooms[sit].get("outline_pt") and not o.get("landing") and not outside:
             ppf = pt_per_ft or 1.0
             (ax, ay), (bx, by) = o["a"], o["b"]
@@ -387,21 +388,28 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             s = 4 / 12 * ppf                          # 4" past the end of the ramp
             ring = rooms[sit]["outline_pt"]
             wall_at = settings.get("wall_at")
-            # a side loses its wing only where the wall (or the room's edge) runs along the ramp:
-            # checked a quarter, half and three quarters of the way down the ADA ramp, so a
-            # doorway the ramp only just nestles into (short jambs, a door leaf) keeps its wings
-            run = sum(depth["ada"] * f for f in scale) / 12 * ppf
+            # how far the wall (or the room's edge) runs down each side of the ramp from the
+            # doorway: the wing is left out only there, where the ramp sits between the walls,
+            # and starts where the wall ends; a side walled the whole way has no wing
+            run_pt = sum(depth["ada"] * f for f in scale) / 12 * ppf
+            step = 1 / 12 * ppf
 
-            def walled(px, py, sx, sy):
-                hits = 0
-                for f in (0.25, 0.5, 0.75):
-                    qx, qy = px + sx * s + ix * max(s, run * f), py + sy * s + iy * max(s, run * f)
-                    hits += (not point_in_polygon(qx, qy, ring)) or bool(wall_at and wall_at(qx, qy))
-                return hits >= 2
-            if wing_l and walled(ax, ay, -ux, -uy):
+            def walled_for(px, py, sx, sy):
+                d = 0.0
+                while d < run_pt:
+                    qx, qy = px + sx * s + ix * max(d, step), py + sy * s + iy * max(d, step)
+                    if point_in_polygon(qx, qy, ring) and not (wall_at and wall_at(qx, qy)):
+                        break
+                    d += step
+                return d
+            wall_a_pt = walled_for(ax, ay, -ux, -uy) if wing_l else 0.0
+            wall_b_pt = walled_for(bx, by, ux, uy) if wing_r else 0.0
+            if wing_l and wall_a_pt >= run_pt - step:
                 wing_l = False
-            if wing_r and walled(bx, by, ux, uy):
+            if wing_r and wall_b_pt >= run_pt - step:
                 wing_r = False
+            wall_a_in = round(wall_a_pt / ppf * 12, 1) if wing_l and wall_a_pt > 1.5 * step else 0.0
+            wall_b_in = round(wall_b_pt / ppf * 12, 1) if wing_r and wall_b_pt > 1.5 * step else 0.0
             n_sides = int(wing_l) + int(wing_r)
         if ada:
             ada_n[series] = ada_n.get(series, 0) + n_ada * tiers
@@ -410,7 +418,8 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             run = 0.0
             for f in scale:
                 run += depth["ada"] * f
-                wings += [run] * n_sides
+                # each wing starts where the wall beside the ramp ends
+                wings += [run - w for w, on in ((wall_a_in, wing_l), (wall_b_in, wing_r)) if on and run - w > 0.5]
             rem = L_in - n_ada * ADA_IN
             if rem > ADA_TOL_IN:
                 parts = 2 if n_sides == 2 else 1
@@ -460,7 +469,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
                     out["labels"].append({"key": key, "series": series, "ada": kind, "tiers": n,
                                           "text": label(series, kind, n, wb, None if wb else over)})
         out["ramps"].append({"index": k, "room_index": sit, "a": o.get("a"), "b": o.get("b"), "normal": list(nrm),
-                             "series": series, "tiers": tiers, "blocking": blocking, "ada": ada, "sides": n_sides, "wing_l": wing_l, "wing_r": wing_r, "height_mm": round(h, 1),
+                             "series": series, "tiers": tiers, "blocking": blocking, "ada": ada, "sides": n_sides, "wing_l": wing_l, "wing_r": wing_r, "wall_a_in": wall_a_in, "wall_b_in": wall_b_in, "height_mm": round(h, 1),
                              "over_index": hi if extra else None, "over_codes": extra,
                              "length_in": round(L_in, 1), "room": rooms[hi].get("name"),
                              "other": rooms[lo].get("name") if lo is not None else None, "trimmed": trimmed,

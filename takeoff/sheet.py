@@ -350,6 +350,19 @@ def ramp_shapes(r, ppf, room=None):
                 prev = (q, ada[k + 1])
             return pieces
 
+        def _trim(pieces, w):
+            """Leave out the part of a wing beside the walls: keep only past depth w."""
+            if w <= 0:
+                return pieces
+            big = 1e5
+            keep = [P(-big, w), P(L + big, w), P(L + big, big), P(-big, big)]
+            res = []
+            for kind, poly in pieces:
+                c = clip_convex(poly, keep)
+                if len(c) >= 3 and abs(sum(c[i - 1][0] * c[i][1] - c[i][0] * c[i - 1][1] for i in range(len(c)))) > 1e-3:
+                    res.append((kind, c))
+            return res
+
         def wall_corner(t, sgn):
             """How far the room's edge runs along the doorway line from t (sgn = direction), and
             the outline vertex where it turns off it."""
@@ -394,13 +407,15 @@ def ramp_shapes(r, ppf, room=None):
 
         if r.get("wing_r", sides >= 1):
             d = W[T] if r.get("std_at_b") else 0.0
-            out += _tier_wing(P(t1, 0), P(t1 + W[T], d), [P(t1, a_) for a_ in A])
-            if not d:
+            wb = (r.get("wall_b_in") or 0) * ft
+            out += _trim(_tier_wing(P(t1, 0), P(t1 + W[T], d), [P(t1, a_) for a_ in A]), wb)
+            if not d and not wb:
                 fill(t1, 1, W[T])
         if r.get("wing_l", sides == 2):
             d = W[T] if r.get("std_at_a") else 0.0
-            out += _tier_wing(P(t0, 0), P(t0 - W[T], d), [P(t0, a_) for a_ in A])
-            if not d:
+            wa = (r.get("wall_a_in") or 0) * ft
+            out += _trim(_tier_wing(P(t0, 0), P(t0 - W[T], d), [P(t0, a_) for a_ in A]), wa)
+            if not d and not wa:
                 fill(t0, -1, W[T])
         return out
     for k in range(T):
