@@ -383,12 +383,14 @@ def ramp_shapes(r, ppf, room=None):
 
         if r.get("wing_r", sides >= 1):
             d = W[T] if r.get("std_at_b") else 0.0
-            out.append(("std", [P(t1, 0), P(t1 + W[T], d), P(t1, A[T])]))
+            for k in range(T):                    # one piece per tier, cut from the tip to the ADA tier's corner
+                out.append(("std" + kinds[k], [P(t1, A[k]), P(t1 + W[T], d), P(t1, A[k + 1])]))
             if not d:
                 fill(t1, 1, W[T])
         if r.get("wing_l", sides == 2):
             d = W[T] if r.get("std_at_a") else 0.0
-            out.append(("std", [P(t0, 0), P(t0 - W[T], d), P(t0, A[T])]))
+            for k in range(T):
+                out.append(("std" + kinds[k], [P(t0, A[k]), P(t0 - W[T], d), P(t0, A[k + 1])]))
             if not d:
                 fill(t0, -1, W[T])
         return out
