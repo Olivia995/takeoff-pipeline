@@ -472,6 +472,20 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
         if not x["ada"] and x.get("a") and not x.get("landing_in"):
             if any(x.get("cut_" + e) is None and not x.get("corner_" + e) for e in ("a", "b")):
                 std_long[x["series"]] = std_long.get(x["series"], 0) + x["tiers"]
+    # the piece joining an ADA wing's overflow back to a wall that turns away beside the jamb
+    # (sheet.ramp_shapes "std-fill") is cut like a short standard edge, its length along the doorway
+    if pt_per_ft:
+        from .sheet import ramp_shapes
+        for x in out["ramps"]:
+            ri = x.get("room_index", -1)
+            if x["ada"] and x.get("a") and 0 <= ri < len(rooms) and rooms[ri].get("outline_pt"):
+                for k, p in ramp_shapes(x, pt_per_ft, rooms[ri]["outline_pt"]):
+                    if k == "std-fill":
+                        e = math.ceil(math.dist(p[0], p[1]) / (pt_per_ft / 12) / ROUND_IN - 1e-6) * ROUND_IN
+                        if e <= R["standard_max_share_in"]:
+                            std_short.setdefault(x["series"], []).append(e)
+                        else:
+                            std_long[x["series"]] = std_long.get(x["series"], 0) + math.ceil(e / R["standard_piece_in"] - 1e-6)
     if any(x["landing_in"] for x in out["ramps"]):
         out["labels"].append({"key": "landing", "series": None, "ada": False, "tiers": 1, "text": "GenieMat FIT08"})
     extra_tiers = cat["rules"].get("transition_overage") or []

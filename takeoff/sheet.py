@@ -335,36 +335,62 @@ def ramp_shapes(r, ppf, room=None):
         # standard run carries on from that side, its tip sits on the run's inner edge, one ramp
         # depth out (Lifetime Sky); against a bare wall it lies along the wall, a right triangle
         # one standard depth long (Cottages Cardio)
-        # A wing with the doorway's wall beside it fills to the wall: its short edge runs along
-        # the doorway line to where the wall turns away (the jamb's corner), its long edge from
-        # there back to the ADA ramp's far corner (drafted: an ADA ramp beside a slanted wall)
-        def to_wall(t, sgn):
+        # A wing keeps its standard shape. Where it runs past the corner of the doorway's wall
+        # (a slanted wall turning away right beside the jamb), the part past the corner would
+        # leave a drop to the floor behind the wall, so another standard piece connects it back
+        # to the wall ("std-fill": from the overflow, square to the doorway, up to the wall)
+        def wall_corner(t, sgn):
+            """How far the room's edge runs along the doorway line from t (sgn = direction), and
+            the outline vertex where it turns off it."""
             if not room:
-                return None
+                return None, None
             tol = 0.75
-            def off(p):                           # distance off the doorway line, and along it
-                return (abs((p[0] - ax) * nx + (p[1] - ay) * ny), (p[0] - ax) * ux + (p[1] - ay) * uy)
-            reach, grew = 0.0, True
+            def off(p):                           # signed distance off the doorway line (into the room +), and along it
+                return ((p[0] - ax) * nx + (p[1] - ay) * ny, (p[0] - ax) * ux + (p[1] - ay) * uy)
+            reach, at, grew = 0.0, None, True
             while grew:
                 grew = False
                 for i in range(len(room)):
                     (d0, s0), (d1, s1) = off(room[i - 1]), off(room[i])
-                    if d0 > tol or d1 > tol:
+                    if abs(d0) > tol or abs(d1) > tol:
                         continue
-                    lo, hi = sorted(((s0 - t) * sgn, (s1 - t) * sgn))
+                    e0, e1 = (s0 - t) * sgn, (s1 - t) * sgn
+                    lo, hi = min(e0, e1), max(e0, e1)
                     if lo <= reach + tol and hi > reach + tol:
-                        reach, grew = hi, True
-            return reach if reach > 0.5 else None
-        def _reach(w):                            # a corner within the ADA depth; a straight wall: one standard depth (Cottages)
-            return w if w and w < A[T] - 0.5 else W[T]
+                        reach, at, grew = hi, (i if e1 > e0 else i - 1) % len(room), True
+            if at is None or reach <= 0.5:
+                return None, None
+            n_ = len(room)
+            for j in ((at + 1) % n_, (at - 1) % n_):  # the wall leaving the line at that corner
+                dj, _sj = off(room[j])
+                if dj < -tol:                     # it turns away from the room side, out past the doorway line
+                    return reach, room[j]
+            return None, None
+
+        def fill(t, sgn, length):
+            reach, far = wall_corner(t, sgn)
+            if reach is None or reach >= length - 0.5:
+                return
+            C, Tp = P(t + sgn * reach, 0), P(t + sgn * length, 0)
+            # the line square to the doorway at the wing's tip, out to the wall (C -> far)
+            from .ramps import _cross_lines
+            X = _cross_lines(Tp, (-nx, -ny), C, (far[0] - C[0], far[1] - C[1]))
+            if X is None:
+                return
+            depth = (X[0] - Tp[0]) * -nx + (X[1] - Tp[1]) * -ny
+            if 0.5 < depth <= A[T]:
+                out.append(("std-fill", [C, Tp, [X[0], X[1]]]))
+
         if r.get("wing_r", sides >= 1):
             d = W[T] if r.get("std_at_b") else 0.0
-            s = W[T] if d else _reach(to_wall(t1, 1))
-            out.append(("std", [P(t1, 0), P(t1 + s, d), P(t1, A[T])]))
+            out.append(("std", [P(t1, 0), P(t1 + W[T], d), P(t1, A[T])]))
+            if not d:
+                fill(t1, 1, W[T])
         if r.get("wing_l", sides == 2):
             d = W[T] if r.get("std_at_a") else 0.0
-            s = W[T] if d else _reach(to_wall(t0, -1))
-            out.append(("std", [P(t0, 0), P(t0 - s, d), P(t0, A[T])]))
+            out.append(("std", [P(t0, 0), P(t0 - W[T], d), P(t0, A[T])]))
+            if not d:
+                fill(t0, -1, W[T])
         return out
     for k in range(T):
         kind = "std" + kinds[k]
