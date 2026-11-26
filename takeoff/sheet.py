@@ -339,6 +339,17 @@ def ramp_shapes(r, ppf, room=None):
         # (a slanted wall turning away right beside the jamb), the part past the corner would
         # leave a drop to the floor behind the wall, so another standard piece connects it back
         # to the wall ("std-fill": from the overflow, square to the doorway, up to the wall)
+        def _tier_wing(base, tip, ada):
+            """The wing cut per tier like the ADA ramp beside it: nested pieces, each cut parallel
+            to the wing's outer edge (tip -> the ADA ramp's far corner) at the corner of a tier."""
+            pieces, prev = [], None
+            for k in range(T):
+                f = (A[k + 1] - A[0]) / ((A[T] - A[0]) or 1.0)
+                q = [base[0] + (tip[0] - base[0]) * f, base[1] + (tip[1] - base[1]) * f]
+                pieces.append(("std" + kinds[k], [base, q, ada[k + 1]] if prev is None else [prev[0], q, ada[k + 1], prev[1]]))
+                prev = (q, ada[k + 1])
+            return pieces
+
         def wall_corner(t, sgn):
             """How far the room's edge runs along the doorway line from t (sgn = direction), and
             the outline vertex where it turns off it."""
@@ -383,14 +394,12 @@ def ramp_shapes(r, ppf, room=None):
 
         if r.get("wing_r", sides >= 1):
             d = W[T] if r.get("std_at_b") else 0.0
-            for k in range(T):                    # one piece per tier, cut from the tip to the ADA tier's corner
-                out.append(("std" + kinds[k], [P(t1, A[k]), P(t1 + W[T], d), P(t1, A[k + 1])]))
+            out += _tier_wing(P(t1, 0), P(t1 + W[T], d), [P(t1, a_) for a_ in A])
             if not d:
                 fill(t1, 1, W[T])
         if r.get("wing_l", sides == 2):
             d = W[T] if r.get("std_at_a") else 0.0
-            for k in range(T):
-                out.append(("std" + kinds[k], [P(t0, A[k]), P(t0 - W[T], d), P(t0, A[k + 1])]))
+            out += _tier_wing(P(t0, 0), P(t0 - W[T], d), [P(t0, a_) for a_ in A])
             if not d:
                 fill(t0, -1, W[T])
         return out
