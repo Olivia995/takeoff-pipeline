@@ -384,14 +384,23 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             Lp = math.hypot(bx - ax, by - ay) or 1.0
             ux, uy = (bx - ax) / Lp, (by - ay) / Lp
             ix, iy = -nrm[0], -nrm[1]
-            s = 4 / 12 * ppf                          # 4" past the end, 4" into the room
+            s = 4 / 12 * ppf                          # 4" past the end of the ramp
             ring = rooms[sit]["outline_pt"]
             wall_at = settings.get("wall_at")
-            if wing_l and (not point_in_polygon(ax - ux * s + ix * s, ay - uy * s + iy * s, ring)
-                           or (wall_at and wall_at(ax - ux * s + ix * s, ay - uy * s + iy * s))):
+            # a side loses its wing only where the wall (or the room's edge) runs along the ramp:
+            # checked a quarter, half and three quarters of the way down the ADA ramp, so a
+            # doorway the ramp only just nestles into (short jambs, a door leaf) keeps its wings
+            run = sum(depth["ada"] * f for f in scale) / 12 * ppf
+
+            def walled(px, py, sx, sy):
+                hits = 0
+                for f in (0.25, 0.5, 0.75):
+                    qx, qy = px + sx * s + ix * max(s, run * f), py + sy * s + iy * max(s, run * f)
+                    hits += (not point_in_polygon(qx, qy, ring)) or bool(wall_at and wall_at(qx, qy))
+                return hits >= 2
+            if wing_l and walled(ax, ay, -ux, -uy):
                 wing_l = False
-            if wing_r and (not point_in_polygon(bx + ux * s + ix * s, by + uy * s + iy * s, ring)
-                           or (wall_at and wall_at(bx + ux * s + ix * s, by + uy * s + iy * s))):
+            if wing_r and walled(bx, by, ux, uy):
                 wing_r = False
             n_sides = int(wing_l) + int(wing_r)
         if ada:
