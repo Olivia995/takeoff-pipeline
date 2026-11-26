@@ -51,10 +51,16 @@ def buildup_mm(cat, layers):
     """Height of an expanded buildup in mm, and the layers with no thickness on file."""
     P = cat["products"]
     total, missing = 0.0, []
-    for l in layers:
+    fams = [P[l["code"]]["family"] for l in layers]
+    for i, l in enumerate(layers):
         p = P[l["code"]]
         if p["family"] == "pmi":
             continue
+        # concrete topping poured over FF is taken as flush with the floor around it, so
+        # the ramp only makes up the layers on top of the concrete (it and the FF under it
+        # sit below the surrounding floor level)
+        if p["family"] == "concrete" and any(f in ("ff", "ff_panel") for f in fams[i + 1:]):
+            break
         if p.get("thickness_mm") is None:
             missing.append(p["display"])
         else:

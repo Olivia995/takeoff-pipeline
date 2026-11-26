@@ -197,6 +197,14 @@ def _num(v):
     return round(v, 1) if abs(v - round(v)) > 0.05 else int(round(v))
 
 
+def _inches(mm):
+    """mm as inches to the nearest 1/8, written like the plywood names: 2", 1½", ¾"."""
+    e = round(mm / 25.4 * 8)
+    whole, frac = divmod(e, 8)
+    f = {0: "", 1: "⅛", 2: "¼", 3: "⅜", 4: "½", 5: "⅝", 6: "¾", 7: "⅞"}[frac]
+    return (str(whole) if whole or not f else "") + f + '"' if e else f"{mm:g} mm"
+
+
 def callout(cat, layers):
     """Buildup label, top first: "A over\nB over\nC". Perimeter isolation runs around the
     edge rather than under the floor, so it's left out; repeated layers are written "2 x ..."."""
@@ -209,6 +217,8 @@ def callout(cat, layers):
             n = p["display"]
         elif p["family"] == "finished_floor":
             n = p["display"] + " (supplied by others)"
+        elif p["family"] == "concrete" and p.get("thickness_mm"):   # 2" Concrete Topping
+            n = f'{_inches(p["thickness_mm"])} {p["display"]} (supplied by others)'
         elif p["family"] in ("plywood", "concrete"):
             n = p["display"] + " (supplied by others)"
         else:
