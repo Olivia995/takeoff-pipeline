@@ -504,9 +504,9 @@ def _dist_box(p, b):
 def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, frame, notes_top,
                  bom_box, turn, col_scale, ppf):
     """The plan drawn as large as the sheet allows, turned whichever way suits it, with each
-    callout in open space near what it points at (as the drafters lay the sheets out).
+    callout in the open sheet around the drawing (never on it), near what it points at (as the drafters lay the sheets out).
     Returns (quarter turns, target rect, scale, clip, pad, [(tip, lines, spot, which)]) when
-    that draws the plan at least 8% bigger than with a callout column, else None."""
+    that draws the plan bigger than with a callout column, else None."""
     import numpy as np
     full = pymupdf.Rect(frame.x0 + 12, frame.y0 + 10, frame.x1 - 12, notes_top - 6)
     # what each callout points at, in plan coordinates
@@ -552,6 +552,8 @@ def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, f
         busy[:int(frame.y0 + 8), :] = 1
         busy[int(notes_top - 2):, :] = 1
         busy[:int(bom_box.y1 + 2), :int(bom_box.x1 + 2)] = 1
+        # callouts go around the drawing, never on it (the leaders cross into it)
+        busy[max(0, int(target.y0)):int(target.y1 + 1), max(0, int(target.x0)):int(target.x1 + 1)] = 1
         texts, legs, out = [], [], []
         for (key, lines, tips, room), (w, h) in zip(wants, sizes):
             ii = np.zeros((H + 1, W + 1), np.int64)
@@ -566,6 +568,8 @@ def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, f
                 return None
             X, Y = xs * 2 + float(M), ys * 2 + float(M)  # the text's top-left
             ptips = [tx(t) for t in tips]
+            others = [[tx(q) for q in r["outline_pt"]] for r in rooms
+                      if room is None or r.get("_key") != room.get("_key")] if room is not None else []
             if room is not None:                         # or anywhere well inside the room (short leaders)
                 poly = [tx(q) for q in room["outline_pt"]]
                 holes = [[tx(q) for q in h_] for h_ in room.get("holes_pt") or []]
@@ -603,6 +607,13 @@ def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, f
                         if cost[i] >= 1e8 or (best and cost[i] >= best[0]):
                             break
                         leg = ((sx[i], sy[i]), (ex[i], sy[i]), tp)
+                        # an arrow across another room reads as pointing at it: avoid when there's room
+                        pen = 0.0
+                        if others:
+                            pen = 120.0 * sum(crosses(a, b, c, d) for a, b in ((leg[0], leg[1]), (leg[1], leg[2]))
+                                              for ring in others for c, d in zip(ring, ring[1:] + ring[:1])) / 2
+                            if best and cost[i] + pen >= best[0]:
+                                continue
                         # leaders don't run through other callouts or cross other leaders
                         if any(r.intersects(pymupdf.Rect(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]) + .1, max(a[1], b[1]) + .1))
                                and any(r.contains(pymupdf.Point(a[0] + (b[0] - a[0]) * t / 20, a[1] + (b[1] - a[1]) * t / 20))
@@ -612,9 +623,10 @@ def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, f
                         if any(crosses(a, b, c, d) for L in legs for a, b in ((L[0], L[1]), (L[1], L[2]))
                                for c, d in ((leg[0], leg[1]), (leg[1], leg[2]))):
                             continue
-                        best = (cost[i], pymupdf.Rect(X[i], Y[i], X[i] + w, Y[i] + h), which, leg, tp)
-                        break
-            if not best or best[0] > 0.33 * (frame.x1 - frame.x0):
+                        best = (cost[i] + pen, pymupdf.Rect(X[i], Y[i], X[i] + w, Y[i] + h), which, leg, tp)
+                        if pen == 0:
+                            break
+            if not best or best[0] > 0.5 * (frame.x1 - frame.x0) + 120:
                 return None
             _c, spot, which, leg, tp = best
             texts.append(spot + (-3, -3, 3, 3))
@@ -630,7 +642,7 @@ def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, f
         pad = max(x1 - x0, y1 - y0) * 0.03 + 4
         clip = pymupdf.Rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad)
         s_full = min(full.width / clip.width, full.height / clip.height)
-        floor_ = max(col_scale * 1.08, found[2] * 1.02 if found else 0)
+        floor_ = max(col_scale * 1.02, found[2] * 1.02 if found else 0)
         f = 1.0
         while s_full * f >= floor_:
             s = s_full * f
@@ -653,7 +665,7 @@ def _free_layout(polys, shapes, rooms, groups, ramp_labels, fonts, cs, cpitch, f
             if done:
                 found = done
                 break
-            f -= 0.04
+            f -= 0.03
     return found
 
 
@@ -775,7 +787,7 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
     if "right" not in side.values() or "left" not in side.values():
         target = target + (area.x1 - target.x1, 0, area.x1 - target.x1, 0)
 
-    # As the drafters do: no column kept for the callouts, they go in the open space around the
+    # As the drafters do: no column kept for the callouts, they go in the open sheet around the
     # rooms (beside the BOM, in a notch of the plan), and the plan may be turned any way round.
     # Used whenever it draws the plan noticeably bigger and every callout finds a spot.
     free = _free_layout(polys, shapes, rooms, takeoff.groups, ramp_labels, fonts, cs, cpitch, frame,
