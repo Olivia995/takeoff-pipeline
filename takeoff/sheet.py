@@ -355,13 +355,15 @@ def ramp_shapes(r, ppf, room=None):
                     if lo <= reach + tol and hi > reach + tol:
                         reach, grew = hi, True
             return reach if reach > 0.5 else None
+        def _reach(w):                            # a corner within the ADA depth; a straight wall: one standard depth (Cottages)
+            return w if w and w < A[T] - 0.5 else W[T]
         if r.get("wing_r", sides >= 1):
             d = W[T] if r.get("std_at_b") else 0.0
-            s = W[T] if d else min(to_wall(t1, 1) or W[T], A[T])
+            s = W[T] if d else _reach(to_wall(t1, 1))
             out.append(("std", [P(t1, 0), P(t1 + s, d), P(t1, A[T])]))
         if r.get("wing_l", sides == 2):
             d = W[T] if r.get("std_at_a") else 0.0
-            s = W[T] if d else min(to_wall(t0, -1) or W[T], A[T])
+            s = W[T] if d else _reach(to_wall(t0, -1))
             out.append(("std", [P(t0, 0), P(t0 - s, d), P(t0, A[T])]))
         return out
     for k in range(T):
