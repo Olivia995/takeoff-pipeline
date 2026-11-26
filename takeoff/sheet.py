@@ -121,6 +121,71 @@ def _diagonal_segments(groups, spacing, origin, angle=45):
     return segs
 
 
+# AutoCAD pattern definitions (acad.pat, inches): (angle, base, offset, dashes) per line family
+PATTERNS = {
+    "DOLMIT": [(0.0, (0.0, 0.0), (0.0, 0.25), []),
+               (45.0, (0.0, 0.0), (-0.5, 0.5), [0.35355339, -0.70710678])],
+}
+
+
+def _pattern_segments(groups, families, unit, angle, origin):
+    """An AutoCAD hatch pattern (see PATTERNS) clipped to each room minus its columns.
+    `unit` = plan points per pattern unit (scale included); `angle` is the hatch angle in
+    degrees as AutoCAD measures it (y up). Plan points run y down, so work flipped."""
+    flip = [[[(p[0] - origin[0], origin[1] - p[1]) for p in poly] for poly in g] for g in groups]
+    segs = []
+    ra = math.radians(angle)
+    cr, sr = math.cos(ra), math.sin(ra)
+    for ang, base, off, dashes in families:
+        a = math.radians(ang + angle)
+        ca, sa = math.cos(a), math.sin(a)
+        b = ((base[0] * cr - base[1] * sr) * unit, (base[0] * sr + base[1] * cr) * unit)
+        o = ((off[0] * cr - off[1] * sr) * unit, (off[0] * sr + off[1] * cr) * unit)
+        # into the line frame: u along the lines, v across them
+        def fr(p):
+            return (p[0] * ca + p[1] * sa, -p[0] * sa + p[1] * ca)
+        turned = [[[fr(p) for p in poly] for poly in g] for g in flip]
+        bu, bv = fr(b)
+        ou, ov = fr(o)
+        if abs(ov) < 1e-9:
+            continue
+        vs = [p[1] for g in turned for poly in g for p in poly]
+        k0, k1 = math.ceil((min(vs) - bv) / ov), math.floor((max(vs) - bv) / ov)
+        if k0 > k1:
+            k0, k1 = k1, k0
+        dashes = [d * unit for d in dashes]
+        period = sum(abs(d) for d in dashes)
+        for k in range(k0, k1 + 1):
+            v = bv + k * ov
+            phase = bu + k * ou
+            for g in turned:
+                c = _cuts(g, v, 0)
+                for j in range(0, len(c) - 1, 2):
+                    lo, hi = c[j], c[j + 1]
+                    pieces = []
+                    if not dashes:
+                        pieces = [(lo, hi)]
+                    else:
+                        n = math.floor((lo - phase) / period)
+                        start = phase + n * period
+                        while start < hi:
+                            at = start
+                            for d in dashes:
+                                if d > 0:
+                                    p0, p1 = max(at, lo), min(at + d, hi)
+                                    if p1 > p0:
+                                        pieces.append((p0, p1))
+                                at += abs(d)
+                            start += period
+                    for p0, p1 in pieces:
+                        pts = []
+                        for u in (p0, p1):
+                            x, y = u * ca - v * sa, u * sa + v * ca
+                            pts.append((x + origin[0], origin[1] - y))
+                        segs.append(tuple(pts))
+    return segs
+
+
 TILE_GRID_FAMILIES = ("fit_tile", "xfit")
 NOT_PLITEQ = ("finished_floor", "plywood", "pmi", "concrete")
 DIAGONAL_FT = 4.0        # ANSI31 at scale 384 = lines 48" apart
@@ -150,6 +215,8 @@ def hatch_kind(p):
         return "rows"
     if (p.get("hatch_pattern") or "").upper() == "BRICK":
         return "brick"
+    if (p.get("hatch_pattern") or "").upper() in PATTERNS:   # Envy / PeakForce: DOLMIT
+        return "pattern"
     if p["family"] in TILE_GRID_FAMILIES or (p["code"].startswith("VersaDUEL") and p["unit"] == "tile"):
         return "grid"
     if p["family"] in ROW_FAMILIES:
@@ -613,6 +680,12 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
                 spacing = math.sqrt(size or 4) * ppf        # 2' x 2' tiles
                 if spacing * s > 1.2:
                     segs = _grid_segments(rings, spacing, (x0, y0))
+            elif kind == "pattern":
+                # drafted sheets: DOLMIT at the product's scale, lines running up the sheet
+                unit = (top.get("hatch_scale") or 1) * ppf / 12
+                fams = PATTERNS[top["hatch_pattern"].upper()]
+                if 0.25 * unit * s > 1.2:
+                    segs = _pattern_segments(rings, fams, unit, 0 if rot else 90, (x0, y0))
             elif kind in ("diagonal", "rows"):
                 spacing = (DIAGONAL_FT if kind == "diagonal" else ROW_FT) * ppf
                 if spacing * s > 1.2:
