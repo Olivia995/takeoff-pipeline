@@ -572,7 +572,12 @@ def _fill_once(page, rough, seed, pt_ft, reach_ft=6.0, deep_ft=5.0, openings=Non
     kb = max(3, int(round(3.0 * pt_ft * s)) | 1)
     core = cv2.erode(wall, np.ones((kb, kb), np.uint8))
     if core.any():
-        wall &= ~(cv2.dilate(core, np.ones((kb, kb), np.uint8)) > 0)
+        # keep a thin rim at its edge: where a wall runs along casework drawn hatched behind it
+        # (IA310's PT01 wall), the two close up into one block, and clearing it all let the floor
+        # run through the wall
+        gone = cv2.dilate(core, np.ones((kb, kb), np.uint8))
+        gone = cv2.erode(gone, np.ones((5, 5), np.uint8))
+        wall &= ~(gone > 0)
     # (after the step above, so a shaft isn't taken for a hidden fill)
     for bx0, by0, bx1, by1 in _x_boxes(page):         # shafts and floor openings: no floor in them
         if min(bx1 - bx0, by1 - by0) < 2.0 * pt_ft:

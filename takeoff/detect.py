@@ -158,10 +158,16 @@ def _wall_mask_vector(page, scale, min_stroke_pt, max_fill_lum, max_stroke_lum, 
     erase_min = 0.0003 * page.rect.width * page.rect.height
     big_fill = 0.01 * page.rect.width * page.rect.height
     dashes = _dash_strokes(drawings)
-    for d in drawings:
+    thin_white = []                                   # thin "white" fills: some PDFs (IA310) report a
+    for d in drawings:                                # special print colour as white: checked below
         if id(d) in dashes:
             continue                                  # a heavy dashed line (a finish/zone boundary), not a wall
         col, fill, w = d.get("color"), d.get("fill"), d.get("width") or 0
+        r_ = d["rect"]
+        if (d.get("type") == "f" and fill and min(fill) >= 0.97 and min(r_.width, r_.height) <= 1.0
+                and max(r_.width, r_.height) >= 3.0):
+            thin_white.append(d)
+            continue
         stroke_ok = _gray(col) and w >= min_stroke_pt and sum(col) / 3 <= max_stroke_lum
         fill_ok = _gray(fill) and sum(fill) / 3 <= max_fill_lum
         if (not stroke_ok and fill and min(fill) >= 0.97 and (d.get("fill_opacity") or 1) >= 0.99
@@ -216,7 +222,23 @@ def _wall_mask_vector(page, scale, min_stroke_pt, max_fill_lum, max_stroke_lum, 
     sh.commit()
     pix = q.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False, colorspace=pymupdf.csGRAY)
     img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width)
-    return (img < 160).astype(np.uint8)
+    mask = (img < 160).astype(np.uint8)
+    if thin_white:
+        # thin lines the file calls white: where the rendered sheet shows them dark (wall lines
+        # printed in a special colour), they're walls
+        q2 = out.new_page(width=page.rect.width, height=page.rect.height)
+        sh2 = q2.new_shape()
+        for d in thin_white:
+            sh2.draw_rect(d["rect"])
+        sh2.finish(color=(0, 0, 0), fill=(0, 0, 0), width=0.6)
+        sh2.commit()
+        p2 = q2.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False, colorspace=pymupdf.csGRAY)
+        where = np.frombuffer(p2.samples, np.uint8).reshape(p2.height, p2.width) < 160
+        p3 = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False, colorspace=pymupdf.csGRAY)
+        real = np.frombuffer(p3.samples, np.uint8).reshape(p3.height, p3.width)
+        if real.shape == mask.shape:
+            mask |= (where & (real < 128)).astype(np.uint8)
+    return mask
 
 
 def drop_specks(mask, max_side_px):
