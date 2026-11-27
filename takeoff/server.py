@@ -422,8 +422,8 @@ def _wall_test(plan, page_no, ppf):
             import numpy as np
             img = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width)
             _WALL_IMG.clear()
-            _WALL_IMG[key] = (img < 150, s)
-        dark, s = _WALL_IMG[key]
+            _WALL_IMG[key] = (img < 150, img < 80, s)
+        dark, black, s = _WALL_IMG[key]
         H, W = dark.shape
         r = max(1, int(round(2 / 12 * ppf * s)))
 
@@ -432,6 +432,16 @@ def _wall_test(plan, page_no, ppf):
             if not (0 <= X < W and 0 <= Y < H):
                 return False
             return bool(dark[max(0, Y - r):Y + r + 1, max(0, X - r):X + r + 1].mean() > 0.5)
+
+        def crosses(x0, y0, x1, y1):
+            """does the segment cross a black line (a wall drawn as thin lines, not poché)?"""
+            n = max(2, int(math.hypot(x1 - x0, y1 - y0) * s) + 1)
+            for k in range(n + 1):
+                X, Y = int((x0 + (x1 - x0) * k / n) * s), int((y0 + (y1 - y0) * k / n) * s)
+                if 0 <= X < W and 0 <= Y < H and black[Y, X]:
+                    return True
+            return False
+        wall_at.crosses = crosses
         return wall_at
     except Exception:
         return None

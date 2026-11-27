@@ -379,7 +379,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
         # ramp ends at a corner of the room (a wing there would hang outside the room)
         wing_l, wing_r = n_sides == 2, n_sides >= 1
         wall_a_in = wall_b_in = 0.0                  # wall beside each side of an ADA ramp, from the doorway
-        if ada and "a" in o and rooms[sit].get("outline_pt") and not o.get("landing") and not outside:
+        if ada and "a" in o and rooms[sit].get("outline_pt") and not o.get("landing"):
             ppf = pt_per_ft or 1.0
             (ax, ay), (bx, by) = o["a"], o["b"]
             Lp = math.hypot(bx - ax, by - ay) or 1.0
@@ -397,8 +397,19 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             def walled_for(px, py, sx, sy):
                 d = 0.0
                 while d < run_pt:
-                    qx, qy = px + sx * s + ix * max(d, step), py + sy * s + iy * max(d, step)
-                    if point_in_polygon(qx, qy, ring) and not (wall_at and wall_at(qx, qy)):
+                    # open floor beside the ramp at this depth, every inch out to 4" (a wall
+                    # drawn as two lines has a white gap a single point can land in); flipped
+                    # out of the room, open floor is outside it, otherwise inside it
+                    ex, ey = px + ix * max(d, step), py + iy * max(d, step)
+                    open_ = not (wall_at and hasattr(wall_at, "crosses")
+                                 and wall_at.crosses(ex, ey, ex + sx * s, ey + sy * s))
+                    for k in range(1, 5 if open_ else 1):
+                        qx = px + sx * k * step + ix * max(d, step)
+                        qy = py + sy * k * step + iy * max(d, step)
+                        if point_in_polygon(qx, qy, ring) == outside or (wall_at and wall_at(qx, qy)):
+                            open_ = False
+                            break
+                    if open_:
                         break
                     d += step
                 return d

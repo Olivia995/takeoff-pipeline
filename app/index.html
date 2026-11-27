@@ -288,6 +288,8 @@ a.btn{text-decoration:none;display:inline-block}
     <button class="tool" data-tool="round" title="Add a round column, cut out of the room (O)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M7 7l10 10M17 7L7 17"/></svg><span class="k">O</span></button>
     <button class="tool" data-tool="column" title="Add a column, cut out of the room (K)"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/><path d="M6 6l12 12M18 6L6 18"/></svg><span class="k">K</span></button>
     <button class="tool" data-tool="barrier" title="Close an opening such as a doorway (B)"><svg viewBox="0 0 24 24"><path d="M4 4v16M20 4v16M4 12h16"/></svg><span class="k">B</span></button>
+    <button class="tool" data-tool="line" title="Draw lines to close off an area, like AutoCAD (L). Then trim them (R) and click inside with the add tool (A)"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="1.6"/><circle cx="20" cy="4" r="1.6"/></svg><span class="k">L</span></button>
+    <button class="tool" data-tool="trim" title="Trim a line back to the lines it crosses (R)"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7" /><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M10 9l4 6M14 9l-4 6"/></svg><span class="k">R</span></button>
     <hr>
     <button class="tool" data-tool="measure" title="Measure a distance or area (M)"><svg viewBox="0 0 24 24"><path d="M3 18L18 3l3 3L6 21z"/><path d="M7 14l2 2M10 11l2 2M13 8l2 2M16 5l1 1"/></svg><span class="k">M</span></button>
     <button class="tool" data-tool="cal" title="Calibrate scale from a known dimension (C)"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 8v8M21 8v8M8 10v4M12 9v6M16 10v4"/></svg><span class="k">C</span></button>
@@ -535,6 +537,7 @@ function setCanvas(w,h){
 }
 function afterLoad(){
   S.rooms=[]; S.barriers=[]; S.activeId=null; S.A=null; S.dirty=true; S.draft=[]; S.calPts=[]; S.barrierStart=null; S.meas=[]; S.measures=[]; S.access=[]; S.accStart=null; S.step="rooms"; S.finalized=false; S.buIndex=0;
+  S.rampInfo=[]; S.lastLines=null; clearTimeout(tkTimer); tkSeq++;   // the last plan's transitions go with it
   const R=S.renderScale;
   const ipf=parseFloat($("scaleSel").value);
   S.params.gap = ipf ? Math.round(3.75*72*R*ipf/2) : Math.round(13.5*R);   // 3.75 ft, same as the CLI
@@ -721,6 +724,89 @@ function nearestLine(arr,c,along,tol){
   }
   return best ? best[1] : null;
 }
+/* ---------- lines (L), trim (R) and picking inside them (A), like AutoCAD ---------- */
+function lineSnap(p){
+  // the end of a drawn line, else a point on one, within a few pixels on screen
+  const tol=10/S.view.z; let best=null;
+  for(const b of S.barriers) for(const q of b){ const d=Math.hypot(q[0]-p[0],q[1]-p[1]); if(d<tol && (!best||d<best[0])) best=[d,q]; }
+  if(best) return [best[1][0],best[1][1]];
+  const tol2=6/S.view.z;
+  for(const [a,b] of S.barriers){ const dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy; if(!L2) continue;
+    const t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2)), q=[a[0]+dx*t,a[1]+dy*t], d=Math.hypot(q[0]-p[0],q[1]-p[1]);
+    if(d<tol2 && (!best||d<best[0])) best=[d,q]; }
+  return best?best[1]:null;
+}
+function endLine(){
+  const c=S.lineChain; S.lineChain=null; renderAll();
+  if(c && c.n) hint("Line drawn. Draw more (L), trim the overhangs (R), then click inside with the add tool (A).");
+}
+function crossT(a,b,c,d){
+  // where segment c-d crosses segment a-b: t along a-b (0..1), or null
+  const r=[b[0]-a[0],b[1]-a[1]], s=[d[0]-c[0],d[1]-c[1]], den=r[0]*s[1]-r[1]*s[0];
+  if(Math.abs(den)<1e-9) return null;
+  const qa=[c[0]-a[0],c[1]-a[1]], t=(qa[0]*s[1]-qa[1]*s[0])/den, u=(qa[0]*r[1]-qa[1]*r[0])/den, e=1e-6;
+  return (t>=-e && t<=1+e && u>=-e && u<=1+e) ? Math.max(0,Math.min(1,t)) : null;
+}
+function trimAt(p){
+  const tol=8/S.view.z; let bi=-1, bd=Infinity;
+  S.barriers.forEach((b,i)=>{ const d=segD(p,b[0],b[1]); if(d<tol && d<bd){ bd=d; bi=i; } });
+  if(bi<0){ flash("Click on one of your lines (drawn with L or B) to trim it."); return; }
+  const [a,b]=S.barriers[bi], dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1e-9, L=Math.sqrt(L2);
+  const tc=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2, ts=[];
+  S.barriers.forEach((c,i)=>{ if(i===bi) return; const t=crossT(a,b,c[0],c[1]); if(t!=null) ts.push(t); });
+  // the drawing's own horizontal and vertical lines cut it too
+  for(const [y,x0,x1] of S.lines.h){ if(Math.abs(dy)<1e-9) continue; const t=(y-a[1])/dy; if(t<0||t>1) continue; const x=a[0]+dx*t; if(x>=x0-0.5&&x<=x1+0.5) ts.push(t); }
+  for(const [x,y0,y1] of S.lines.v){ if(Math.abs(dx)<1e-9) continue; const t=(x-a[0])/dx; if(t<0||t>1) continue; const y=a[1]+dy*t; if(y>=y0-0.5&&y<=y1+0.5) ts.push(t); }
+  const gap=1/L;    // cuts within a pixel of each other or of the click count once
+  let lo=0, hi=1;
+  for(const t of ts){ if(t<tc-gap && t>lo) lo=t; if(t>tc+gap && t<hi) hi=t; }
+  pushHist();
+  const P=t=>[a[0]+dx*t,a[1]+dy*t], keep=[];
+  if(lo>gap) keep.push([a,P(lo)]);
+  if(hi<1-gap) keep.push([P(hi),b]);
+  S.barriers.splice(bi,1,...keep); S.dirty=true; renderOverlay();
+  hint(lo===0&&hi===1 ? "That line crossed nothing, so it was removed. Cmd/Ctrl-Z brings it back." : "Trimmed. Click another piece to trim, or click inside with the add tool (A).");
+}
+function lineFace(p){
+  // the smallest area your lines close off around p (a planar-graph face, like AutoCAD's
+  // hatch pick point), as a polygon, or null
+  const segs=S.barriers.filter(b=>Math.hypot(b[1][0]-b[0][0],b[1][1]-b[0][1])>1e-6);
+  if(segs.length<3) return null;
+  const tol=Math.max(1.5,4/S.view.z), nodes=[];    // gaps of a few screen pixels count as closed
+  const node=q=>{ for(let i=0;i<nodes.length;i++) if(Math.hypot(nodes[i][0]-q[0],nodes[i][1]-q[1])<=tol) return i; nodes.push([q[0],q[1]]); return nodes.length-1; };
+  const edges=new Set(), adj=[];
+  const addE=(i,j)=>{ if(i===j) return; const k=i<j?i+","+j:j+","+i; if(edges.has(k)) return; edges.add(k); (adj[i]=adj[i]||[]).push(j); (adj[j]=adj[j]||[]).push(i); };
+  segs.forEach(([a,b],i)=>{
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy), ts=[0,1];
+    segs.forEach(([c,d],j)=>{ if(i===j) return; const t=crossT(a,b,c,d); if(t!=null) ts.push(t);
+      // an end that stops just short of this line (within the tolerance) still meets it
+      for(const q of [c,d]){ const t2=((q[0]-a[0])*dx+(q[1]-a[1])*dy)/(L*L); if(t2>0&&t2<1&&segD(q,a,b)<=tol) ts.push(t2); } });
+    ts.sort((x,y)=>x-y); let prev=null;
+    for(const t of ts){ const n=node([a[0]+dx*t,a[1]+dy*t]); if(prev!=null) addE(prev,n); prev=n; }
+  });
+  // drop dead ends (overhangs that weren't trimmed)
+  const deg=nodes.map((_,i)=>(adj[i]||[]).length), alive=nodes.map(()=>true);
+  let changed=true;
+  while(changed){ changed=false;
+    nodes.forEach((_,i)=>{ if(alive[i] && deg[i]<2){ alive[i]=false; changed=true; for(const j of adj[i]||[]) if(alive[j]) deg[j]--; } }); }
+  const out=i=>(adj[i]||[]).filter(j=>alive[j]);
+  // walk the faces: at each node take the next edge clockwise from the one we came in on
+  // (with y flipped up, bounded faces come out anticlockwise: positive area)
+  const ang=(i,j)=>Math.atan2(-(nodes[j][1]-nodes[i][1]), nodes[j][0]-nodes[i][0]);
+  const used=new Set(), faces=[];
+  nodes.forEach((_,u)=>{ if(!alive[u]) return; for(const v of out(u)){
+    if(used.has(u+">"+v)) continue;
+    const ring=[]; let a=u, b=v, guard=0;
+    while(!used.has(a+">"+b) && guard++<5000){ used.add(a+">"+b); ring.push(a);
+      const back=ang(b,a), cand=out(b);
+      let best=null, bestD=Infinity;
+      for(const w of cand){ if(w===a && cand.length>1) continue; let d=back-ang(b,w); while(d<=1e-12) d+=2*Math.PI; if(d<bestD){ bestD=d; best=w; } }
+      if(best==null) break; a=b; b=best; }
+    if(ring.length>=3){ const pts=ring.map(i=>nodes[i]); let A=0; for(let i=0,j=pts.length-1;i<pts.length;j=i++) A+=(pts[j][0]*(-pts[i][1]))-(pts[i][0]*(-pts[j][1]));
+      if(A/2>1) faces.push(pts); } } });
+  const hits=faces.filter(f=>inPoly(p[0],p[1],f)).sort((m,n)=>polyArea(m)-polyArea(n));
+  return hits.length?hits[0].map(q=>[q[0],q[1]]):null;
+}
 function accEnd(p,skip){
   // the nearest end of another transition, within a few pixels on screen
   const tol=10/S.view.z; let best=null;
@@ -734,6 +820,7 @@ function snapPt(p,e,skip){
   S.snapMark=null;
   if(e && e.altKey) return p;
   if(S.tool==="access" || skip!=null){ const q=accEnd(p,skip); if(q){ S.snapMark=q; return q; } }
+  if(S.tool==="line" || S.tool==="barrier"){ const q=lineSnap(p); if(q){ S.snapMark=q; return q; } }
   if(!S.lines.h.length) return p;
   const tol=7/S.view.z;
   const x=nearestLine(S.lines.v,p[0],p[1],tol), y=nearestLine(S.lines.h,p[1],p[0],tol);
@@ -869,6 +956,15 @@ async function detect(useAi){
 }
 
 async function clickDetect(x,y){
+  // inside a shape closed off by your own lines: the room is exactly that shape
+  const face=lineFace([x,y]);
+  if(face){
+    const fa=polyArea(face), same=S.rooms.find(r=>inRoom(x,y,r) && Math.abs(polyArea(r.pts)-fa)<=fa*0.005);
+    if(same){ same.include=true; S.activeId=same.id; renderAll(); return; }
+    const r=addRoom(face,"lines"); r.include=true; S.activeId=r.id; renderAll();
+    flash(`Area from your lines${sf(fa)!=null?`: ${Math.round(sf(fa))} SF`:""}.`, 5000);
+    return;
+  }
   // already a room here: just include it
   const here=S.rooms.filter(r=>inRoom(x,y,r)).sort((a,b)=>polyArea(a.pts)-polyArea(b.pts))[0];
   if(here){ here.include=true; S.activeId=here.id; renderAll(); return; }
@@ -962,12 +1058,14 @@ const TOOL_HINTS={
   exclude:"Click the corners of an area to leave out of the room (an irregular column, planter or casework). Double-click, Enter or click the first corner to finish. Points snap to the drawing; Shift keeps edges square; Cmd/Ctrl-Z undoes the last point.",
   round:"Click inside a round column drawn on the plan to cut it out. If it isn't drawn as a circle, click its centre, then its edge.",
   column:"Click two opposite corners of a column. Its area is taken out of the room. Corners snap to the drawing's lines (hold Alt for free placement).",
+  line:"Click to draw lines, one after another (they snap to line ends and the drawing; Shift keeps them square). Double-click, Enter or Esc ends the line; clicking its first point closes it. Then trim the overhangs (R) and click inside with the add tool (A): the room takes the shape your lines close off.",
+  trim:"Click the part of a line to cut away: it is trimmed back to the nearest lines it crosses (your lines or the drawing's). Cmd/Ctrl-Z undoes.",
   measure:"Click points to measure. After a click you can type a length (12'6, 42\", 12.5) and press Enter to place the next point that far toward the cursor. Double-click or Enter to finish; click the first point to close a shape. Click a measurement to select it, drag its points, or press Delete. Esc twice clears all."
 };
 function toolHint(){ return S.W ? TOOL_HINTS[S.tool] : ""; }
 function setTool(t){
   if(t!=="aipick") S.aiPicks=[];
-  S.tool=t; S.sel=null; S.typed=""; S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null;
+  S.tool=t; S.sel=null; S.typed=""; S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null; S.lineChain=null;
   document.querySelectorAll(".tool").forEach(b=>b.setAttribute("aria-pressed", b.dataset.tool===t?"true":"false"));
   vp.className="viewport t-"+t; hint(toolHint()); renderOverlay();
 }
@@ -990,14 +1088,17 @@ window.addEventListener("keydown",e=>{
   }
   if(S.sel && (e.key==="Delete"||e.key==="Backspace")){ e.preventDefault(); deleteSel(); return; }
   if(S.sel && e.key==="Escape"){ S.sel=null; renderOverlay(); renderPop(); return; }
+  if((e.key==="z"||e.key==="Z")&&(e.metaKey||e.ctrlKey)&&S.tool==="line"&&S.lineChain){ e.preventDefault();
+    if(S.lineChain.n>0){ undoEdit(); S.lineChain.n--; S.lineChain.last=S.lineChain.n?S.barriers[S.barriers.length-1][1]:S.lineChain.first; } else S.lineChain=null; renderOverlay(); return; }
   if((e.key==="z"||e.key==="Z")&&(e.metaKey||e.ctrlKey)&&!S.draft.length&&!S.meas.length&&!S.cut.length&&!S.accStart&&!S.barrierStart){ e.preventDefault(); undoEdit(); return; }
   const k=e.key.toLowerCase();
   if(k===" "){ spaceDown=true; vp.classList.add("t-pan"); e.preventDefault(); return; }
-  const map={v:"select",h:"pan",a:"click",d:"draw",b:"barrier",c:"cal",m:"measure",k:"column",o:"round",e:"exclude",x:"split",t:"access"};
+  const map={v:"select",h:"pan",a:"click",d:"draw",b:"barrier",c:"cal",m:"measure",k:"column",o:"round",e:"exclude",x:"split",t:"access",l:"line",r:"trim"};
   if(map[k]&&!e.metaKey&&!e.ctrlKey){ setTool(map[k]); return; }
   if(e.key==="Escape"){
     if(S.tool==="measure" && !S.meas.length && S.measures.length){ S.measures=[]; flash("Measurements cleared."); }
     S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null; renderOverlay(); }
+  if((e.key==="Enter"||e.key==="Escape") && S.tool==="line" && S.lineChain){ endLine(); return; }
   if(e.key==="Enter" && S.tool==="draw") finishDraft(e);
   if(e.key==="Enter" && S.tool==="exclude") finishExclude();
   if(e.key==="Enter" && S.tool==="measure") finishMeasure(false);
@@ -1048,7 +1149,7 @@ vp.addEventListener("pointermove",e=>{
     }
     return;
   }
-  if(((S.tool==="draw"||S.tool==="exclude")&&S.draft.length)||(S.tool==="barrier"&&S.barrierStart)||(S.tool==="cal"&&S.calPts.length===1)||(S.tool==="measure"&&S.meas.length)||S.tool==="column"||S.tool==="round"||S.tool==="access"||S.snapMark||["draw","measure","split"].includes(S.tool)) renderOverlay();
+  if(((S.tool==="draw"||S.tool==="exclude")&&S.draft.length)||(S.tool==="barrier"&&S.barrierStart)||(S.tool==="cal"&&S.calPts.length===1)||(S.tool==="measure"&&S.meas.length)||S.tool==="column"||S.tool==="round"||S.tool==="access"||S.snapMark||["draw","measure","split","line"].includes(S.tool)) renderOverlay();
   if(S.tool==="measure" && S.meas.length && S.pxPerFt){
     const q=e_shift_hover(S.meas,S.hover||p), seg=lenFt(S.meas[S.meas.length-1],q), tot=pathFt(S.meas.concat([q]),false);
     hint(`${fmtLen(seg)}` + (S.meas.length>1 ? ` · total ${fmtLen(tot)}` : "") + "  —  click to add a point, double-click or Enter to finish");
@@ -1072,14 +1173,15 @@ vp.addEventListener("dblclick",e=>{ if(S.sel && hitObj(toImg(e))) return;
     // the two clicks of a double-click toggled the room twice; leave it selected
     insertVertex(p); }
   if(S.tool==="measure"){ e.preventDefault(); finishMeasure(false); }
-  if(S.tool==="split"){ e.preventDefault(); finishSplit(); } });
+  if(S.tool==="split"){ e.preventDefault(); finishSplit(); }
+  if(S.tool==="line"){ e.preventDefault(); endLine(); } });
 
 function onClick(p,e){
   const t=S.tool;
   if(S.sel){ S.sel=null; renderPop(); }
   if(t==="aipick"){ S.aiPicks.push(p); renderOverlay();
     hint(`${S.aiPicks.length} room${S.aiPicks.length>1?"s":""} marked. Click inside the next room, or press Enter to trace (about ${S.aiPicks.length*(aiInfo&&aiInfo.trace_model==="claude-sonnet-5-5"?1:4)}¢). Backspace removes the last; Esc cancels.`); return; }
-  if(["draw","exclude","measure","column","barrier","cal","split","access"].includes(t)) p=snapPt(p,e);
+  if(["draw","exclude","measure","column","barrier","cal","split","access","line"].includes(t)) p=snapPt(p,e);
   if(t==="access"){
     const now=performance.now();
     if(!S.accStart){ S.accStart=p; S.accT=now; renderOverlay(); hint("Click the other end of the opening, or double-click a wall for a 42\" ADA. Esc cancels."); return; }
@@ -1129,6 +1231,17 @@ function onClick(p,e){
     else S.activeId=null;
     renderAll();
   } else if(t==="click"){ clickDetect(p[0],p[1]); }
+  else if(t==="line"){
+    const c=S.lineChain;
+    if(!c){ S.lineChain={first:p, last:p, n:0}; renderOverlay(); hint("Click the next point. Double-click, Enter or Esc ends the line."); return; }
+    let q=e.shiftKey?ortho(c.last,p):p;
+    if(Math.hypot(q[0]-c.last[0],q[1]-c.last[1])<2/S.view.z) return;        // second click of a double-click
+    const closes=c.n>=2 && Math.hypot(q[0]-c.first[0],q[1]-c.first[1])<10/S.view.z;
+    if(closes) q=c.first;
+    pushHist(); S.barriers.push([c.last,[q[0],q[1]]]); S.dirty=true; c.last=[q[0],q[1]]; c.n++;
+    if(closes) endLine(); else renderOverlay();
+  }
+  else if(t==="trim"){ trimAt(p); }
   else if(t==="draw"||t==="exclude"){
     let q=p;
     if(e.shiftKey && S.draft.length) q=ortho(S.draft[S.draft.length-1],p);
@@ -1657,6 +1770,9 @@ function renderOverlay(){
     for(const p of S.draft) h+=handle(p);
     if(S.pxPerFt && pts.length>=3) h+=`<text class="mlabel" x="${pts[0][0]}" y="${pts[0][1]}" dy="${-0.6*fs}" font-size="${fs*0.9}" stroke-width="${3/z}">${Math.round(sf(polyArea(pts))*10)/10} SF</text>`;
   }
+  if(S.tool==="line" && S.lineChain && hv){ const a=S.lineChain.last, b=shiftDown?ortho(a,hv):hv;
+    h+=`<line class="barrier" style="opacity:.6" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`;
+    if(S.pxPerFt) h+=`<text class="mlabel" x="${(a[0]+b[0])/2}" y="${(a[1]+b[1])/2}" dy="${-0.5*fs}" font-size="${fs*0.9}" stroke-width="${3/z}" text-anchor="middle">${fmtLen(lenFt(a,b))}</text>`; }
   if(S.tool==="barrier" && S.barrierStart && hv) h+=`<line class="barrier" style="opacity:.6" x1="${S.barrierStart[0]}" y1="${S.barrierStart[1]}" x2="${hv[0]}" y2="${hv[1]}"/>`;
   if(S.tool==="aipick") S.aiPicks.forEach((q,i)=>{ const rr=9/S.view.z;
     h+=`<circle cx="${q[0]}" cy="${q[1]}" r="${rr}" fill="#6A1B9A" stroke="#fff" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${q[0]}" y="${q[1]+rr*0.4}" text-anchor="middle" font-size="${rr*1.2}" fill="#fff" font-weight="700" style="pointer-events:none">${i+1}</text>`; });
@@ -1811,7 +1927,7 @@ function renderTakeoff(){
   updateBuildBtn();
   const tb=$("tblock"), ready=incRooms().filter(layersDone), all=incRooms();
   if(!ready.length || !S.pxPerFt){
-    S.lastLines=null; $("tnotes").innerHTML=""; $("twarn").innerHTML="";
+    S.lastLines=null; S.rampInfo=[]; clearTimeout(tkTimer); tkSeq++; $("tnotes").innerHTML=""; $("twarn").innerHTML="";
     tb.className="tblock empty-t"; tb.textContent = !S.pxPerFt ? "Set the drawing scale to get square footage." : "Finish the buildups to see the BOM.";
     return;
   }
