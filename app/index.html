@@ -2010,7 +2010,7 @@ function transitionsPayload(){
   return {slab:S.slab, recess_mm:S.slab==="partial"?(parseFloat($("recessIn").value)||0):0,
     no_transitions_date:$("noTrDate").value||null, no_ada_date:$("noAdaDate").value||null,
     openings:S.slab==="recessed"?[]:S.access.map(x=>({a:[+(x.a[0]/R).toFixed(2),+(x.a[1]/R).toFixed(2)], b:[+(x.b[0]/R).toFixed(2),+(x.b[1]/R).toFixed(2)],
-      type:x.type, sides:x.sides??2, ada_width:x.adaWidth||"full", landing:!!x.landing, flip:!!x.flip}))};
+      type:x.type, sides:x.sides??2, ada_width:x.adaWidth||"full", landing:!!x.landing, flip:!!x.flip, pair:x.pair??null}))};
 }
 function takeoffParams(){ return {in_per_ft:inPerFt(), manual_notes:[...S.manualOn], transitions:transitionsPayload()}; }
 function distToRing(p,pts){ let best=1e18; for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];
@@ -2073,6 +2073,13 @@ function renderAccess(){
     }
     const lb=document.createElement("label"), cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!x.landing;
     cb.onchange=()=>{ x.landing=cb.checked; renderAll(); }; lb.append(cb, "Door swings in (FIT08 landing)"); opt.append(lb);
+    if(x.landing){
+      // a pair of doors: the landing is one leaf deep; over 48" counts as a pair unless switched off
+      const wide=S.pxPerFt ? lenFt(x.a,x.b)*12>48 : false, isPair=x.pair==null?wide:x.pair;
+      const lp=document.createElement("label"), cp=document.createElement("input"); cp.type="checkbox"; cp.checked=isPair;
+      cp.onchange=()=>{ x.pair=cp.checked; renderAll(); };
+      lp.append(cp, "Pair of doors (landing one leaf deep)"+(x.pair==null?" · auto":"")); opt.append(lp);
+    }
     li.append(ln,len,t,sel,del,opt); ul.appendChild(li);
   });
   const n=S.rampInfo.length;
@@ -2371,7 +2378,7 @@ $("importFile").onchange=async e=>{
     const tk=data.takeoff||{}, map={system:"system",overage:"overage",project:"project",dwg:"dwg",drawn_by:"drawnBy",date:"date"};
     for(const [k,id] of Object.entries(map)) if(tk[k]!=null && tk[k]!=="") $(id).value=tk[k];
     const tr=tk.transitions||{};
-    S.access=(tr.openings||data.access_pt||[]).map(x=>({a:[x.a[0]*R,x.a[1]*R], b:[x.b[0]*R,x.b[1]*R], type:x.type||"std", sides:x.sides??2, adaWidth:x.ada_width||"full", landing:!!x.landing, flip:!!x.flip}));
+    S.access=(tr.openings||data.access_pt||[]).map(x=>({a:[x.a[0]*R,x.a[1]*R], b:[x.b[0]*R,x.b[1]*R], type:x.type||"std", sides:x.sides??2, adaWidth:x.ada_width||"full", landing:!!x.landing, flip:!!x.flip, pair:x.pair??null}));
     $("recessIn").value=tr.recess_mm||(tr.recess_in?Math.round(tr.recess_in*25.4):""); $("noTrDate").value=tr.no_transitions_date||""; $("noAdaDate").value=tr.no_ada_date||"";
     setSlab(tr.slab||(S.access.length?"raised":"recessed"));
     S.nextId=Math.max(0,...S.rooms.map(r=>r.id))+1; S.activeId=null; renderAll();

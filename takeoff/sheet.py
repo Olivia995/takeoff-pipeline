@@ -995,16 +995,19 @@ def render_sheet(out_path, plan_doc, page_no, rooms, takeoff, company, meta, cat
             sp.pop()
         # round joins: a thin wing's sharp tip would otherwise draw a long mitre spike past the corner
         page.draw_polyline(sp + [sp[0]], color=INK, fill=(1, 1, 1), width=0.8, closePath=True, lineJoin=1)
-        if kind == "landing":                     # the door's swing over the landing
-            hinge, end, open_ = pts[0], pts[1], pts[3]
-            rad = abs(end - hinge)
-            a0 = math.atan2(end.y - hinge.y, end.x - hinge.x)
-            a1 = math.atan2(open_.y - hinge.y, open_.x - hinge.x)
-            da = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
-            arc = [pymupdf.Point(hinge.x + rad * math.cos(a0 + da * i / 24), hinge.y + rad * math.sin(a0 + da * i / 24))
-                   for i in range(25)]
-            arc = [q for q in arc if abs(q - hinge) <= rad + 0.01]
-            page.draw_polyline(arc, color=INK, width=0.4)
+        if kind == "landing":                     # the door's swing over the landing (both leaves of a pair)
+            mid = (pts[0] + pts[1]) / 2
+            swings = ([(pts[0], mid, pts[3]), (pts[1], mid, pts[2])] if x.get("pair")
+                      else [(pts[0], pts[1], pts[3])])
+            for hinge, end, swung in swings:
+                rad = abs(end - hinge)
+                a0 = math.atan2(end.y - hinge.y, end.x - hinge.x)
+                a1 = math.atan2(swung.y - hinge.y, swung.x - hinge.x)
+                da = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+                arc = [pymupdf.Point(hinge.x + rad * math.cos(a0 + da * i / 24), hinge.y + rad * math.sin(a0 + da * i / 24))
+                       for i in range(25)]
+                arc = [q for q in arc if abs(q - hinge) <= rad + 0.01]
+                page.draw_polyline(arc, color=INK, width=0.4)
         key = "landing" if kind == "landing" else x.get("label_" + kind.replace("-", "_"), x["label_std"])
         tips.setdefault(key, []).append(pymupdf.Point(sum(p.x for p in sp) / len(sp), sum(p.y for p in sp) / len(sp)))
     if shapes:                                    # columns inside a room cut the ramps too

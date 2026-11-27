@@ -374,7 +374,12 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
         n_sides = int(o.get("sides", 2))
         full = o.get("ada_width", "full") != "one"
         n_ada = max(1, math.ceil((L_in - ADA_TOL_IN) / ADA_IN - 1e-6)) if full else 1
-        land_in = L_in + R.get("landing_extra_in", 2) if o.get("landing") else 0.0
+        # a pair of doors swings one leaf each way, so the landing is one leaf deep (WonderFemme
+        # D-212); over 48" counts as a pair unless the opening says otherwise
+        pair = o.get("pair")
+        if pair is None:
+            pair = L_in > R.get("pair_over_in", 48)
+        land_in = (L_in / 2 if pair else L_in) + R.get("landing_extra_in", 2) if o.get("landing") else 0.0
         # which sides of an ADA ramp get a wing: the drafter's choice, less any side where the
         # ramp ends at a corner of the room (a wing there would hang outside the room)
         wing_l, wing_r = n_sides == 2, n_sides >= 1
@@ -488,7 +493,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
                              "depth_in": depth, "tier_scale": scale,
                              "label_std": f"{series}-std-1{sfx}", "label_ada": f"{series}-ada-1{sfx}",
                              "label_std_wb": f"{series}-std-{tiers - 1}-wb", "label_ada_wb": f"{series}-ada-{tiers - 1}-wb",
-                             "flip": bool(o.get("flip")), "outside": outside})
+                             "flip": bool(o.get("flip")), "outside": outside, "pair": bool(pair)})
 
     _joins(out["ramps"], pt_per_ft or 1.0, rooms, settings.get("wall_at"))
     # a standard ramp ending at a door jamb (no wall or other ramp to stop against) is cut back
