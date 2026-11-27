@@ -77,9 +77,9 @@ def _client():
     return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
 
 
-def _picture(page, rect, pt, ticks=True):
-    """PNG of `rect` (PDF points) with the click marked and pixel numbers along the edges.
-    Returns (png bytes, px per pt)."""
+def _picture(page, rect, pt, ticks=True, hint=None):
+    """PNG of `rect` (PDF points) with the click marked and pixel numbers along the edges, and
+    the user's rough outline (`hint`, PDF points) in orange. Returns (png bytes, px per pt)."""
     z = MAX_PX / max(rect.width, rect.height)
     rot = page.rotation
     if rot:                                         # outlines are in unrotated page points
@@ -99,6 +99,11 @@ def _picture(page, rect, pt, ticks=True):
         if v < H:
             cv2.line(img, (0, v), (10, v), (200, 120, 0), 1)
             cv2.putText(img, str(v), (12, v + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 120, 0), 1)
+    if hint:
+        P = np.round((np.array(hint, float) - (rect.x0, rect.y0)) * z).astype(np.int32)
+        over = img.copy()
+        cv2.polylines(over, [P], True, (0, 140, 255), 5)
+        img = cv2.addWeighted(over, 0.55, img, 0.45, 0)
     cx, cy = int((pt[0] - rect.x0) * z), int((pt[1] - rect.y0) * z)
     cv2.circle(img, (cx, cy), 14, (0, 0, 230), 2)
     cv2.circle(img, (cx, cy), 5, (0, 0, 230), -1)
@@ -138,7 +143,13 @@ def _label_hint(label):
             "trace the room that carries that label instead.") if label else ""
 
 
-def _ask_claude(client, png, label=None, model=None):
+HINT_TEXT = ("\n\nA thick orange line shows the user's rough outline of this room. It is only a guide: it may cut "
+             "corners, sit inside or outside the walls, run diagonally where the walls step, or skip recesses and "
+             "pilasters. Use it to know which room is meant and roughly how far it reaches, but trace the actual "
+             "wall faces and edge lines of the drawing as described above, never the orange line itself.")
+
+
+def _ask_claude(client, png, label=None, model=None, hint=False):
     model = model or MODEL
     extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model == "claude-opus-5-5" else {}
     resp = client.beta.messages.create(
@@ -149,7 +160,7 @@ def _ask_claude(client, png, label=None, model=None):
         messages=[{"role": "user", "content": [
             {"type": "image", "source": {"type": "base64", "media_type": "image/png",
                                          "data": base64.standard_b64encode(png).decode()}},
-            {"type": "text", "text": PROMPT + _label_hint(label)}]}],
+            {"type": "text", "text": PROMPT + _label_hint(label) + (HINT_TEXT if hint else "")}]}],
     )
     text = next((b.text for b in resp.content if b.type == "text"), None)
     data = json.loads(text) if text and resp.stop_reason != "refusal" else None
@@ -157,7 +168,7 @@ def _ask_claude(client, png, label=None, model=None):
 
 
 def rough_outline(page, pt, pt_ft, half_ft=45.0, provider="gemini", client=None, log=None, view=None, label=None,
-                  model=None, doors=None):
+                  model=None, doors=None, hint=None):
     """The model's rough outline (PDF points) of the room at `pt`; grows the view once if the
     room runs off the picture. `view` (x0, y0, x1, y1 in PDF points) frames the picture around
     the whole room when its rough extent is known; otherwise it's a square of 2 × half_ft.
@@ -175,9 +186,9 @@ def rough_outline(page, pt, pt_ft, half_ft=45.0, provider="gemini", client=None,
             h = half_ft * pt_ft * (2 if attempt else 1)
             rect = pymupdf.Rect(pt[0] - h, pt[1] - h, pt[0] + h, pt[1] + h) & page.rect
         with _SNAP_LOCK:                            # PyMuPDF pages aren't safe to render from two threads at once
-            png, z = _picture(page, rect, pt, ticks=provider == "claude")
+            png, z = _picture(page, rect, pt, ticks=provider == "claude", hint=hint)
         if provider == "claude":
-            data, i_tok, o_tok = _ask_claude(client, png, label, model)
+            data, i_tok, o_tok = _ask_claude(client, png, label, model, hint=bool(hint))
         else:
             W, H = int(round(rect.width * z)), int(round(rect.height * z))
             data, i_tok, o_tok = _ask_gemini(png, W, H)
@@ -1254,27 +1265,21 @@ def room_at(page, pt, pt_ft, provider="gemini", client=None, log=None, view=None
     if claude:
         client = client or _client()
     log = log if log is not None else []
+    hint = None
     if rough is not None:
-        # the user drew the rough outline: no tracing call; the review sees the same framing
-        usage = {"input": 0, "output": 0, "calls": 0}
+        # the user drew a rough outline: it frames the picture and is shown to Claude as a guide
+        # to which room and how far it reaches; Claude still traces the walls. Taken literally
+        # (snapped onto the walls) it kept every slanted or sloppy edge as drawn.
+        hint = rough
         xs, ys = [x for x, _ in rough], [y for _, y in rough]
         x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
-        pad = max(15 * pt_ft, 0.25 * max(x1 - x0, y1 - y0))
-        rect = pymupdf.Rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad) & page.rect
-        log.append({"rect": [rect.x0, rect.y0, rect.x1, rect.y1], "from_user": True})
-    else:
-        rough, usage = rough_outline(page, pt, pt_ft, provider=provider, client=client, log=log, view=view,
-                                     label=label, model=model, doors=doors)
+        pad = max(10 * pt_ft, 0.15 * max(x1 - x0, y1 - y0))
+        view = (x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+    rough, usage = rough_outline(page, pt, pt_ft, provider=provider, client=client, log=log, view=view,
+                                 label=label, model=model, doors=doors, hint=hint)
     if not rough:
         return None
     fit = _fit
-    if log and log[-1].get("from_user"):
-        # an outline the user drew has its corners about right: snapping its edges onto the
-        # wall faces beside them beat filling the floor (95% vs 93% the same as the saved
-        # outlines, jittered 1 ft, on 6 rooms × 3 tries)
-        def fit(page, rough, pt, pt_ft, client):
-            with _SNAP_LOCK:
-                return snap_outline(page, rough, pt_ft), "snapped", [], {"check_input": 0, "check_output": 0}
     out, how, cuts, chk = fit(page, rough, pt, pt_ft, client if claude else None)
     usage["check_input"], usage["check_output"] = chk["check_input"], chk["check_output"]
     rev = None
@@ -1302,10 +1307,7 @@ def room_at(page, pt, pt_ft, provider="gemini", client=None, log=None, view=None
                     out, how, cuts, rough = snap_to_lines(page, fixed, pt_ft), "reviewed", [], fixed
                 rev["kept_review"] = True
     ops = cands = kinds = None
-    if claude and not (log and log[0].get("from_user")):
-        # every possible opening, each checked close up. Not for an outline the user drew:
-        # there are no marked doors or fill cuts to start from, so Find openings searches it
-        # like any other room
+    if claude:                                       # every possible opening, each checked close up
         with _SNAP_LOCK:
             cands = opening_candidates(page, out, cuts, doors, pt_ft)
         ops, kinds, (ci, co) = check_openings(page, cands, pt_ft, client)

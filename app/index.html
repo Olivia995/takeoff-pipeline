@@ -892,7 +892,7 @@ async function traceRooms(){
 function closeRough(){
   if(S.rdraft.length<3){ flash("Click at least three corners round the room."); return; }
   S.roughs.push(S.rdraft); S.rdraft=[]; renderOverlay();
-  hint(`${S.roughs.length} room${S.roughs.length>1?"s":""} outlined. Outline the next room, or press Enter to send ${S.roughs.length>1?"them":"it"} to Claude (about ${S.roughs.length*5}¢).`);
+  hint(`${S.roughs.length} room${S.roughs.length>1?"s":""} outlined. Outline the next room, or press Enter to send ${S.roughs.length>1?"them":"it"} to Claude (about ${S.roughs.length*15}¢).`);
 }
 async function traceRough(){
   // rough outlines the user drew: snapped onto the walls, then Claude reviews each and checks its doorways
@@ -914,7 +914,7 @@ async function traceRough(){
     }
     S.roughs=[]; setTool("select"); renderAll();
     const miss=outs.length-ok;
-    flash(`${ok} room${ok===1?"":"s"} fitted and checked by Claude in ${Math.round(d.seconds||0)} s (${d.cost_usd==null?"price unknown":"about $"+d.cost_usd.toFixed(2)}). They're included; check the borders.`+(miss?` ${miss} couldn't be fitted: draw ${miss>1?"those":"that one"} with D.`:""), 10000);
+    flash(`${ok} room${ok===1?"":"s"} traced by Claude in ${Math.round(d.seconds||0)} s (${d.cost_usd==null?"price unknown":"about $"+d.cost_usd.toFixed(2)}). They're included; check the borders.`+(miss?` ${miss} couldn't be fitted: draw ${miss>1?"those":"that one"} with D.`:""), 10000);
   }catch(err){ busy(false); flash(err.message, 10000); }
 }
 let aiInfo=null;
@@ -1087,7 +1087,7 @@ const TOOL_HINTS={
   exclude:"Click the corners of an area to leave out of the room (an irregular column, planter or casework). Double-click, Enter or click the first corner to finish. Points snap to the drawing; Shift keeps edges square; Cmd/Ctrl-Z undoes the last point.",
   round:"Click inside a round column drawn on the plan to cut it out. If it isn't drawn as a circle, click its centre, then its edge.",
   column:"Click two opposite corners of a column. Its area is taken out of the room. Corners snap to the drawing's lines (hold Alt for free placement).",
-  rough:"Click a few corners round a room, roughly on its walls (within a foot or so). Double-click, Enter or click the first corner to close it, then outline the next room. Press Enter with no outline open to send them to Claude: each is snapped onto the walls, then Claude checks it and its doorways (about 5¢ a room). Backspace removes the last corner, or the last outline.",
+  rough:"Click a few corners round a room, roughly on its walls (within a foot or so). Double-click, Enter or click the first corner to close it, then outline the next room. Press Enter with no outline open to send them to Claude: each is snapped onto the walls, Claude traces the real walls using it as a guide, then reviews the result and checks the doorways (about 15¢ a room). Backspace removes the last corner, or the last outline.",
   line:"Click to draw lines, one after another (they snap to line ends and the drawing; Shift keeps them square). Double-click, Enter or Esc ends the line; clicking its first point closes it. Then trim the overhangs (R) and click inside with the add tool (A): the room takes the shape your lines close off.",
   trim:"Click the part of a line to cut away: it is trimmed back to the nearest lines it crosses (your lines or the drawing's). Cmd/Ctrl-Z undoes.",
   measure:"Click points to measure. After a click you can type a length (12'6, 42\", 12.5) and press Enter to place the next point that far toward the cursor. Double-click or Enter to finish; click the first point to close a shape. Click a measurement to select it, drag its points, or press Delete. Esc twice clears all."
