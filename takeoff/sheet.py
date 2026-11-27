@@ -291,10 +291,20 @@ def ramp_shapes(r, ppf, room=None):
     if D:
         out.append(("landing", rect(0, L, 0, D)))
         for k in range(T):                        # first tier against the landing, the rest outside it
+            if r["ada"]:
+                if sides >= 1:
+                    out.append(("std" + kinds[k], rect(L + W[k], L + W[k + 1], 0, D)))
+                if sides == 2:
+                    out.append(("std" + kinds[k], rect(-W[k + 1], -W[k], 0, D)))
+                continue
+            # standard ramps frame the landing like a picture frame (WonderFemme D-212): each
+            # side runs from the door out to a 45 degree mitre where it meets the front ramp
             if sides >= 1:
-                out.append(("std" + kinds[k], rect(L + W[k], L + W[k + 1], 0, D)))
+                out.append(("std" + kinds[k], [P(L + W[k], 0), P(L + W[k + 1], 0),
+                                               P(L + W[k + 1], D + W[k + 1]), P(L + W[k], D + W[k])]))
             if sides == 2:
-                out.append(("std" + kinds[k], rect(-W[k + 1], -W[k], 0, D)))
+                out.append(("std" + kinds[k], [P(-W[k], 0), P(-W[k], D + W[k]),
+                                               P(-W[k + 1], D + W[k + 1]), P(-W[k + 1], 0)]))
     if not r["ada"]:
         # a standard ramp's ends are cut back 45 degrees: full length on the room side, the
         # edge at the opening shorter by one ramp depth at each end, with a triangular side
@@ -310,12 +320,16 @@ def ramp_shapes(r, ppf, room=None):
             d0, d1 = D + W[k], D + W[k + 1]
             c = min(d1 - d0, L / 2 - 0.01)
             kind = "std" + kinds[k]
-            a0, a1 = (on_cut(ca, d0), on_cut(ca, d1)) if ca else (P(c, d0), P(0, d1))
-            b0, b1 = (on_cut(cb, d0), on_cut(cb, d1)) if cb else (P(L - c, d0), P(L, d1))
+            # in front of a landing, an end with a side ramp mitres into it (the frame's corner)
+            fa, fb = D and sides == 2, D and sides >= 1
+            a0, a1 = ((P(-W[k], d0), P(-W[k + 1], d1)) if fa else
+                      (on_cut(ca, d0), on_cut(ca, d1)) if ca else (P(c, d0), P(0, d1)))
+            b0, b1 = ((P(L + W[k], d0), P(L + W[k + 1], d1)) if fb else
+                      (on_cut(cb, d0), on_cut(cb, d1)) if cb else (P(L - c, d0), P(L, d1)))
             out.append((kind, [a0, b0, b1, a1]))
-            if not ca:
+            if not ca and not fa:
                 out.append((kind, [P(0, d0), P(c, d0), P(0, d1)]))
-            if not cb:
+            if not cb and not fb:
                 out.append((kind, [P(L, d0), P(L, d1), P(L - c, d0)]))
         return out
     # ADA ramps are cut to the opening (Parkview PTC-1: a 48" door is ordered as 2 x 42" but
