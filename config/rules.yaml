@@ -42,6 +42,10 @@ ramps:
   adhesive_fas1_sf_per_pail: 500     # ((150/2)/75)*125*4
   # FIT08 landing at a door that swings onto the buildup: door width x (width + this)
   landing_extra_in: 2
+  # at an ADA landing, the side ramps mitre into the ADA ramp's ends with no wings when the ADA ramp
+  # is at most this much deeper than a standard ramp (FIT30 13 vs 6: no wings, Fitness Center;
+  # FIT70 32.5 vs 9: wings, Parkview PTC-1)
+  landing_mitre_max_in: 12
 
 # VersaTURF: 15' wide rolls, up to 100' long. Ordered SF = the room's length (rounded up to
 # the next foot) x its width rounded up to a multiple of 15' (the room's minimum bounding

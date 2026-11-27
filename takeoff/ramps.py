@@ -427,12 +427,17 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
             wall_a_in = round(wall_a_pt / ppf * 12, 1) if wing_l and wall_a_pt > 1.5 * step else 0.0
             wall_b_in = round(wall_b_pt / ppf * 12, 1) if wing_r and wall_b_pt > 1.5 * step else 0.0
             n_sides = int(wing_l) + int(wing_r)
+        # at a landing whose side ramps are about as deep as the ADA ramp (FIT30: 12" vs 13"),
+        # the side ramps mitre straight into the ADA ramp's ends: no wings (Fitness Center,
+        # 16310 NE 80th). A much deeper ADA ramp (FIT70: 32.5" vs 18") still needs its wings
+        # past the side ramps (Parkview PTC-1).
+        mitred = bool(ada and land_in and depth["ada"] - depth["standard"] <= R.get("landing_mitre_max_in", 12))
         if ada:
             ada_n[series] = ada_n.get(series, 0) + n_ada * tiers
             # each exposed side of each tier's ADA ramp gets a wing as long as the ADA ramps
             # up to it (one tier: as long as the ADA ramp is deep)
             run = 0.0
-            for f in scale:
+            for f in (scale if not mitred else []):
                 run += depth["ada"] * f
                 # each wing starts where the wall beside the ramp ends
                 wings += [run - w for w, on in ((wall_a_in, wing_l), (wall_b_in, wing_r)) if on and run - w > 0.5]
@@ -493,7 +498,7 @@ def plan(cat, rooms, openings, settings, pt_per_ft=None):
                              "depth_in": depth, "tier_scale": scale,
                              "label_std": f"{series}-std-1{sfx}", "label_ada": f"{series}-ada-1{sfx}",
                              "label_std_wb": f"{series}-std-{tiers - 1}-wb", "label_ada_wb": f"{series}-ada-{tiers - 1}-wb",
-                             "flip": bool(o.get("flip")), "outside": outside, "pair": bool(pair)})
+                             "flip": bool(o.get("flip")), "outside": outside, "pair": bool(pair), "mitred": mitred})
 
     _joins(out["ramps"], pt_per_ft or 1.0, rooms, settings.get("wall_at"))
     # a standard ramp ending at a door jamb (no wall or other ramp to stop against) is cut back

@@ -291,7 +291,7 @@ def ramp_shapes(r, ppf, room=None):
     if D:
         out.append(("landing", rect(0, L, 0, D)))
         for k in range(T):                        # first tier against the landing, the rest outside it
-            if r["ada"]:
+            if r["ada"] and not r.get("mitred"):
                 if sides >= 1:
                     out.append(("std" + kinds[k], rect(L + W[k], L + W[k + 1], 0, D)))
                 if sides == 2:
@@ -338,7 +338,15 @@ def ramp_shapes(r, ppf, room=None):
     t0 = (L - w) / 2 if sides == 2 else 0.0
     t1 = t0 + w
     left, right = t0 > 0.5, L - t1 > 0.5
+    mit = bool(D and r.get("mitred"))
     for k in range(T):
+        if mit:
+            # the ADA ramp runs out across the landing's side ramps, its ends mitred into them
+            d0, d1, dw = D + A[k], D + A[k + 1], D + W[k + 1]
+            rr = [P(t1 + W[k], d0), P(t1 + W[k + 1], dw), P(t1 + W[k + 1], d1)] if sides >= 1 else [P(t1, d0), P(t1, d1)]
+            ll = [P(t0 - W[k + 1], d1), P(t0 - W[k + 1], dw), P(t0 - W[k], d0)] if sides == 2 else [P(t0, d1), P(t0, d0)]
+            out.append(("ada" + kinds[k], rr + ll))
+            continue
         out.append(("ada" + kinds[k], rect(t0, t1, D + A[k], D + A[k + 1])))
         if left:
             out.append(("std" + kinds[k], rect(0, t0, D + W[k], D + W[k + 1])))
@@ -432,7 +440,7 @@ def ramp_shapes(r, ppf, room=None):
             if not d and not wa:
                 fill(t0, -1, W[T])
         return out
-    for k in range(T):
+    for k in range(T if not mit else 0):
         kind = "std" + kinds[k]
         if r.get("wing_r", sides >= 1):
             d0 = D + (W[T] if right else 0)
