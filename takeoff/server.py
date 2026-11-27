@@ -263,14 +263,23 @@ def api_ai_trace(_q, body):
     from concurrent.futures import ThreadPoolExecutor
     from . import ai_outline
     from .detect import point_in_polygon
+    # rough outlines the user drew (the rough-outline tool) replace Claude's first trace: each is
+    # fitted onto the drawing, then Claude reviews it and checks the openings as usual
+    roughs = [o for o in body.get("outlines") or [] if len(o) >= 3][:30]
     if not ai.get_key("claude"):
         raise ApiError("Tracing rooms needs a Claude API key. Add one in AI settings.")
     page_no = int(body.get("page", 1))
     _doc, page = _open_page(body["plan"], page_no)
     ppf = pt_per_ft(float(body["in_per_ft"]))
-    pts = [p for p in body.get("points") or [] if len(p) == 2][:30]
+    if roughs:
+        pts = [ai_outline.inside_point(o) for o in roughs]
+        rough_of = {id(p): o for p, o in zip(pts, roughs) if p}
+        pts = [p for p in pts if p]
+    else:
+        rough_of = {}
+        pts = [p for p in body.get("points") or [] if len(p) == 2][:30]
     if not pts:
-        raise ApiError("Click inside the rooms to trace first.")
+        raise ApiError("Click inside the rooms to trace first." if not roughs else "Those outlines are too small to fill.")
     try:                                             # the line-traced rooms frame each picture and give a name
         lined = _detect_cached(body["plan"], page_no, page, ppf, body)
     except Exception:
@@ -290,7 +299,7 @@ def api_ai_trace(_q, body):
         label = " ".join(x for x in ((r or {}).get("name"), (r or {}).get("number")) if x) or None
         try:
             res = ai_outline.room_at(page, list(p), ppf, provider="claude", client=client, view=view,
-                                     label=label, model=model)
+                                     label=label, model=model, rough=rough_of.get(id(p)))
         except ai.AiError as e:
             raise ApiError(str(e))
         except Exception as e:

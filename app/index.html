@@ -282,6 +282,7 @@ a.btn{text-decoration:none;display:inline-block}
     <hr>
     <button class="tool" data-tool="click" title="Add a room by clicking inside it (A)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 9v6M9 12h6"/></svg><span class="k">A</span></button>
     <button class="tool" data-tool="draw" title="Draw a room outline (D)"><svg viewBox="0 0 24 24"><path d="M4 19l3-13 9 2 4 9-8 3z"/><circle cx="4" cy="19" r="1.2"/><circle cx="7" cy="6" r="1.2"/><circle cx="16" cy="8" r="1.2"/></svg><span class="k">D</span></button>
+    <button class="tool" data-tool="rough" title="Rough outline for Claude: click a few corners round each room, then Enter (G)"><svg viewBox="0 0 24 24"><path d="M4 18l2-12 12 1 2 10z" stroke-dasharray="3 2"/><path d="M15 15l5 5"/></svg><span class="k">G</span></button>
     <button class="tool" data-tool="access" title="Mark an access point that needs a ramp (T)"><svg viewBox="0 0 24 24"><path d="M3 18h18M5 18l14-8" /><path d="M5 18v-3"/></svg><span class="k">T</span></button>
     <button class="tool" data-tool="split" title="Split an area in two, e.g. for a different buildup (X)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M14 2l-4 20" stroke-dasharray="3 2"/></svg><span class="k">X</span></button>
     <button class="tool" data-tool="exclude" title="Cut an irregular shape out of a room: columns, planters, casework (E)"><svg viewBox="0 0 24 24"><path d="M5 7l7-3 7 5-2 9-9 1z"/><path d="M8 8l8 8M16 8l-8 8"/></svg><span class="k">E</span></button>
@@ -448,7 +449,7 @@ const S = {
   view:{z:1,x:0,y:0},
   A:null, dirty:true,
   draft:[], barrierStart:null, calPts:[], hover:null, meas:[], measures:[], colStart:null, circles:[], rcStart:null,
-  lines:{h:[],v:[]}, aiPicks:[], snapMark:null, cut:[], products:[], manualNotes:[], manualOn:new Set(), slab:"recessed", rampInfo:[], access:[], accStart:null,
+  lines:{h:[],v:[]}, aiPicks:[], roughs:[], rdraft:[], snapMark:null, cut:[], products:[], manualNotes:[], manualOn:new Set(), slab:"recessed", rampInfo:[], access:[], accStart:null,
   step:"rooms", finalized:false, buIndex:0,
   params:{thr:200, thin:1, gap:17, minSf:30}
 };
@@ -888,6 +889,34 @@ async function traceRooms(){
     flash(`Claude traced ${ok} room${ok===1?"":"s"} in ${Math.round(d.seconds||0)} s (${d.cost_usd==null?"price unknown":"about $"+d.cost_usd.toFixed(2)}). They're included; check the borders.`+(miss?` ${miss} couldn't be traced: draw ${miss>1?"those":"that one"} with D.`:""), 10000);
   }catch(err){ busy(false); flash(err.message, 10000); }
 }
+function closeRough(){
+  if(S.rdraft.length<3){ flash("Click at least three corners round the room."); return; }
+  S.roughs.push(S.rdraft); S.rdraft=[]; renderOverlay();
+  hint(`${S.roughs.length} room${S.roughs.length>1?"s":""} outlined. Outline the next room, or press Enter to send ${S.roughs.length>1?"them":"it"} to Claude (about ${S.roughs.length*5}¢).`);
+}
+async function traceRough(){
+  // rough outlines the user drew: snapped onto the walls, then Claude reviews each and checks its doorways
+  const outs=S.roughs.slice();
+  if(!outs.length){ flash("Click a few corners round a room first, then press Enter."); return; }
+  const R=S.renderScale, p=S.params;
+  busy(true, `Claude is checking ${outs.length} room${outs.length>1?"s":""}…`); await nextFrame();
+  try{
+    const d=await api("/api/ai/trace",{plan:S.plan, page:S.pageNum, in_per_ft:inPerFt(),
+      threshold:p.thr, thin:p.thin, gap_ft: 2*p.gap/S.pxPerFt, min_sf:p.minSf,
+      barriers_pt: S.barriers.map(b=>[[b[0][0]/R,b[0][1]/R],[b[1][0]/R,b[1][1]/R]]),
+      outlines: outs.map(o=>o.map(([x,y])=>[x/R,y/R]))});
+    busy(false);
+    let ok=0;
+    for(const q of d.rooms){ if(!q) continue; ok++;
+      const r=addRoom(q.outline_pt.map(([x,y])=>[x*R,y*R]),"ai");
+      if(q.name) r.name=q.name; r.number=q.number||null; r.include=true; r.openings=q.openings_pt||null;
+      r.holes=(q.holes_pt||[]).map(h=>h.map(([x,y])=>[x*R,y*R]));
+    }
+    S.roughs=[]; setTool("select"); renderAll();
+    const miss=outs.length-ok;
+    flash(`${ok} room${ok===1?"":"s"} fitted and checked by Claude in ${Math.round(d.seconds||0)} s (${d.cost_usd==null?"price unknown":"about $"+d.cost_usd.toFixed(2)}). They're included; check the borders.`+(miss?` ${miss} couldn't be fitted: draw ${miss>1?"those":"that one"} with D.`:""), 10000);
+  }catch(err){ busy(false); flash(err.message, 10000); }
+}
 let aiInfo=null;
 async function loadAiStatus(){
   try{ aiInfo=await api("/api/ai/status"); }catch(e){ aiInfo=null; }
@@ -1058,6 +1087,7 @@ const TOOL_HINTS={
   exclude:"Click the corners of an area to leave out of the room (an irregular column, planter or casework). Double-click, Enter or click the first corner to finish. Points snap to the drawing; Shift keeps edges square; Cmd/Ctrl-Z undoes the last point.",
   round:"Click inside a round column drawn on the plan to cut it out. If it isn't drawn as a circle, click its centre, then its edge.",
   column:"Click two opposite corners of a column. Its area is taken out of the room. Corners snap to the drawing's lines (hold Alt for free placement).",
+  rough:"Click a few corners round a room, roughly on its walls (within a foot or so). Double-click, Enter or click the first corner to close it, then outline the next room. Press Enter with no outline open to send them to Claude: each is snapped onto the walls, then Claude checks it and its doorways (about 5¢ a room). Backspace removes the last corner, or the last outline.",
   line:"Click to draw lines, one after another (they snap to line ends and the drawing; Shift keeps them square). Double-click, Enter or Esc ends the line; clicking its first point closes it. Then trim the overhangs (R) and click inside with the add tool (A): the room takes the shape your lines close off.",
   trim:"Click the part of a line to cut away: it is trimmed back to the nearest lines it crosses (your lines or the drawing's). Cmd/Ctrl-Z undoes.",
   measure:"Click points to measure. After a click you can type a length (12'6, 42\", 12.5) and press Enter to place the next point that far toward the cursor. Double-click or Enter to finish; click the first point to close a shape. Click a measurement to select it, drag its points, or press Delete. Esc twice clears all."
@@ -1065,7 +1095,7 @@ const TOOL_HINTS={
 function toolHint(){ return S.W ? TOOL_HINTS[S.tool] : ""; }
 function setTool(t){
   if(t!=="aipick") S.aiPicks=[];
-  S.tool=t; S.sel=null; S.typed=""; S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null; S.lineChain=null;
+  S.tool=t; S.sel=null; S.typed=""; S.draft=[]; S.barrierStart=null; S.calPts=[]; S.meas=[]; S.colStart=null; S.rcStart=null; S.snapMark=null; S.cut=[]; S.accStart=null; S.lineChain=null; S.rdraft=[]; if(t!=="rough") S.roughs=[];
   document.querySelectorAll(".tool").forEach(b=>b.setAttribute("aria-pressed", b.dataset.tool===t?"true":"false"));
   vp.className="viewport t-"+t; hint(toolHint()); renderOverlay();
 }
@@ -1080,6 +1110,11 @@ window.addEventListener("keydown",e=>{
     if(e.key==="Escape"){ setTool("select"); flash("AI tracing cancelled."); return; }
     if((e.key==="w"||e.key==="W")&&!e.metaKey&&!e.ctrlKey){ e.preventDefault(); setTool("select"); detect(true); return; }
   }
+  if(S.tool==="rough"){
+    if(e.key==="Enter"){ e.preventDefault(); if(S.rdraft.length) closeRough(); else traceRough(); return; }
+    if(e.key==="Backspace"||((e.key==="z"||e.key==="Z")&&(e.metaKey||e.ctrlKey))){ e.preventDefault(); if(S.rdraft.length) S.rdraft.pop(); else S.roughs.pop(); renderOverlay(); return; }
+    if(e.key==="Escape"){ if(S.rdraft.length){ S.rdraft=[]; renderOverlay(); } else setTool("select"); return; }
+  }
   if(typingOk() && !e.metaKey && !e.ctrlKey){
     if(/^[0-9.'"\-\/′″]$/.test(e.key)){ S.typed+=e.key; e.preventDefault(); typedHint(); renderOverlay(); return; }
     if(S.typed && e.key==="Backspace"){ S.typed=S.typed.slice(0,-1); e.preventDefault(); typedHint(); renderOverlay(); return; }
@@ -1093,7 +1128,7 @@ window.addEventListener("keydown",e=>{
   if((e.key==="z"||e.key==="Z")&&(e.metaKey||e.ctrlKey)&&!S.draft.length&&!S.meas.length&&!S.cut.length&&!S.accStart&&!S.barrierStart){ e.preventDefault(); undoEdit(); return; }
   const k=e.key.toLowerCase();
   if(k===" "){ spaceDown=true; vp.classList.add("t-pan"); e.preventDefault(); return; }
-  const map={v:"select",h:"pan",a:"click",d:"draw",b:"barrier",c:"cal",m:"measure",k:"column",o:"round",e:"exclude",x:"split",t:"access",l:"line",r:"trim"};
+  const map={v:"select",h:"pan",a:"click",d:"draw",b:"barrier",c:"cal",m:"measure",k:"column",o:"round",e:"exclude",x:"split",t:"access",l:"line",r:"trim",g:"rough"};
   if(map[k]&&!e.metaKey&&!e.ctrlKey){ setTool(map[k]); return; }
   if(e.key==="Escape"){
     if(S.tool==="measure" && !S.meas.length && S.measures.length){ S.measures=[]; flash("Measurements cleared."); }
@@ -1149,7 +1184,7 @@ vp.addEventListener("pointermove",e=>{
     }
     return;
   }
-  if(((S.tool==="draw"||S.tool==="exclude")&&S.draft.length)||(S.tool==="barrier"&&S.barrierStart)||(S.tool==="cal"&&S.calPts.length===1)||(S.tool==="measure"&&S.meas.length)||S.tool==="column"||S.tool==="round"||S.tool==="access"||S.snapMark||["draw","measure","split","line"].includes(S.tool)) renderOverlay();
+  if(((S.tool==="draw"||S.tool==="exclude")&&S.draft.length)||(S.tool==="barrier"&&S.barrierStart)||(S.tool==="cal"&&S.calPts.length===1)||(S.tool==="measure"&&S.meas.length)||S.tool==="column"||S.tool==="round"||S.tool==="access"||S.snapMark||["draw","measure","split","line","rough"].includes(S.tool)) renderOverlay();
   if(S.tool==="measure" && S.meas.length && S.pxPerFt){
     const q=e_shift_hover(S.meas,S.hover||p), seg=lenFt(S.meas[S.meas.length-1],q), tot=pathFt(S.meas.concat([q]),false);
     hint(`${fmtLen(seg)}` + (S.meas.length>1 ? ` · total ${fmtLen(tot)}` : "") + "  —  click to add a point, double-click or Enter to finish");
@@ -1174,7 +1209,8 @@ vp.addEventListener("dblclick",e=>{ if(S.sel && hitObj(toImg(e))) return;
     insertVertex(p); }
   if(S.tool==="measure"){ e.preventDefault(); finishMeasure(false); }
   if(S.tool==="split"){ e.preventDefault(); finishSplit(); }
-  if(S.tool==="line"){ e.preventDefault(); endLine(); } });
+  if(S.tool==="line"){ e.preventDefault(); endLine(); }
+  if(S.tool==="rough"){ e.preventDefault(); closeRough(); } });
 
 function onClick(p,e){
   const t=S.tool;
@@ -1242,6 +1278,12 @@ function onClick(p,e){
     if(closes) endLine(); else renderOverlay();
   }
   else if(t==="trim"){ trimAt(p); }
+  else if(t==="rough"){
+    const d=S.rdraft, last=d[d.length-1];
+    if(d.length>=3 && Math.hypot(p[0]-d[0][0],p[1]-d[0][1])<10/S.view.z){ closeRough(); return; }
+    if(last && Math.hypot(p[0]-last[0],p[1]-last[1])<2/S.view.z) return;     // second click of a double-click
+    d.push([p[0],p[1]]); renderOverlay();
+  }
   else if(t==="draw"||t==="exclude"){
     let q=p;
     if(e.shiftKey && S.draft.length) q=ortho(S.draft[S.draft.length-1],p);
@@ -1769,6 +1811,12 @@ function renderOverlay(){
     h+=`<polygon class="coldraft" points="${pts.map(p=>p.join(",")).join(" ")}"/>`;
     for(const p of S.draft) h+=handle(p);
     if(S.pxPerFt && pts.length>=3) h+=`<text class="mlabel" x="${pts[0][0]}" y="${pts[0][1]}" dy="${-0.6*fs}" font-size="${fs*0.9}" stroke-width="${3/z}">${Math.round(sf(polyArea(pts))*10)/10} SF</text>`;
+  }
+  if(S.tool==="rough"){
+    for(const o of S.roughs) h+=`<polygon points="${o.map(p=>p.join(",")).join(" ")}" fill="#E65100" fill-opacity=".08" stroke="#E65100" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>`;
+    if(S.rdraft.length){ const pts=S.rdraft.concat(hv?[hv]:[]);
+      h+=`<polyline points="${pts.map(p=>p.join(",")).join(" ")}" fill="none" stroke="#E65100" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>`;
+      for(const p of S.rdraft) h+=handle(p); }
   }
   if(S.tool==="line" && S.lineChain && hv){ const a=S.lineChain.last, b=shiftDown?ortho(a,hv):hv;
     h+=`<line class="barrier" style="opacity:.6" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`;

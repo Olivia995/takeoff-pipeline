@@ -1225,8 +1225,26 @@ def _fit(page, rough, pt, pt_ft, client):
     return out, how, cuts, {"check_input": ci, "check_output": co, "notches": len(notches)}
 
 
+def inside_point(poly):
+    """A point well inside a polygon (farthest from its edges on a grid): where the floor fill
+    starts for an outline the user drew."""
+    xs, ys = [x for x, _ in poly], [y for _, y in poly]
+    x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+    best, bd = None, -1.0
+    n = 24
+    for i in range(1, n):
+        for j in range(1, n):
+            x, y = x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * j / n
+            if not point_in_polygon(x, y, poly):
+                continue
+            d = min(_seg_dist((x, y), poly[k - 1], poly[k])[0] for k in range(len(poly)))
+            if d > bd:
+                best, bd = [x, y], d
+    return best
+
+
 def room_at(page, pt, pt_ft, provider="gemini", client=None, log=None, view=None, label=None, model=None,
-            review=True):
+            review=True, rough=None):
     """{outline_pt, area_sf, rough_pt, usage, method, openings_pt, review} for the room at `pt`, or None.
     With Claude: trace (rough_outline), fit onto the drawing (_fit), then Claude reviews the
     fitted outline drawn over the plan and corrects it if needed, and the correction is fitted
@@ -1236,11 +1254,28 @@ def room_at(page, pt, pt_ft, provider="gemini", client=None, log=None, view=None
     if claude:
         client = client or _client()
     log = log if log is not None else []
-    rough, usage = rough_outline(page, pt, pt_ft, provider=provider, client=client, log=log, view=view, label=label,
-                                 model=model, doors=doors)
+    if rough is not None:
+        # the user drew the rough outline: no tracing call; the review sees the same framing
+        usage = {"input": 0, "output": 0, "calls": 0}
+        xs, ys = [x for x, _ in rough], [y for _, y in rough]
+        x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+        pad = max(15 * pt_ft, 0.25 * max(x1 - x0, y1 - y0))
+        rect = pymupdf.Rect(x0 - pad, y0 - pad, x1 + pad, y1 + pad) & page.rect
+        log.append({"rect": [rect.x0, rect.y0, rect.x1, rect.y1], "from_user": True})
+    else:
+        rough, usage = rough_outline(page, pt, pt_ft, provider=provider, client=client, log=log, view=view,
+                                     label=label, model=model, doors=doors)
     if not rough:
         return None
-    out, how, cuts, chk = _fit(page, rough, pt, pt_ft, client if claude else None)
+    fit = _fit
+    if log and log[-1].get("from_user"):
+        # an outline the user drew has its corners about right: snapping its edges onto the
+        # wall faces beside them beat filling the floor (95% vs 93% the same as the saved
+        # outlines, jittered 1 ft, on 6 rooms × 3 tries)
+        def fit(page, rough, pt, pt_ft, client):
+            with _SNAP_LOCK:
+                return snap_outline(page, rough, pt_ft), "snapped", [], {"check_input": 0, "check_output": 0}
+    out, how, cuts, chk = fit(page, rough, pt, pt_ft, client if claude else None)
     usage["check_input"], usage["check_output"] = chk["check_input"], chk["check_output"]
     rev = None
     if claude and review and log:
@@ -1255,7 +1290,7 @@ def room_at(page, pt, pt_ft, provider="gemini", client=None, log=None, view=None
         usage["calls"] += 1
         rev = {"changed": bool(fixed), "problems": problems, "before_pt": out}
         if fixed:
-            out2, how2, cuts2, chk2 = _fit(page, fixed, pt, pt_ft, client)
+            out2, how2, cuts2, chk2 = fit(page, fixed, pt, pt_ft, client)
             usage["check_input"] += chk2["check_input"]
             usage["check_output"] += chk2["check_output"]
             if out2 and _overlap(out2, fixed) >= 0.97:
@@ -1267,7 +1302,10 @@ def room_at(page, pt, pt_ft, provider="gemini", client=None, log=None, view=None
                     out, how, cuts, rough = snap_to_lines(page, fixed, pt_ft), "reviewed", [], fixed
                 rev["kept_review"] = True
     ops = cands = kinds = None
-    if claude:                                       # every possible opening, each checked close up
+    if claude and not (log and log[0].get("from_user")):
+        # every possible opening, each checked close up. Not for an outline the user drew:
+        # there are no marked doors or fill cuts to start from, so Find openings searches it
+        # like any other room
         with _SNAP_LOCK:
             cands = opening_candidates(page, out, cuts, doors, pt_ft)
         ops, kinds, (ci, co) = check_openings(page, cands, pt_ft, client)
