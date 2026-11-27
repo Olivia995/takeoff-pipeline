@@ -38,7 +38,6 @@ products:
 
   # ---- xFIT (above FIT in the BOM, thickest first) -------------------------
   - {code: xFIT100, display: GenieMat xFIT100, family: xfit, unit: tile, unit_size: 4, thickness_mm: 100, adhesive: xfit100, bond: glued}  # 4 SF per tile, 100mm tall (confirmed by Pliteq); FAS1 = SF x 1291/132000
-  - {code: xFIT30,  display: GenieMat xFIT30,  family: xfit, unit: tile, unit_size: 4,    thickness_mm: 30,  adhesive: pending, bond: glued}  # TODO calculator
   - {code: xFIT70,  display: GenieMat xFIT70,  family: xfit, unit: tile, unit_size: 4,    thickness_mm: 70,  adhesive: xfit70, bond: glued}  # FAS1 = SF x 763/132000
 
   # ---- FIT ------------------------------------------------------------------
