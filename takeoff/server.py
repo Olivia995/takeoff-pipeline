@@ -257,6 +257,25 @@ def api_ai_detect(_q, body):
     return out
 
 
+def _log_trace(body, pt, user_rough, res, room):
+    """Every stage of a Claude trace, one JSON line per room in work/ai_traces.jsonl (kept out of
+    git), so a bad outline can be traced to the step that went wrong."""
+    try:
+        rev = res.get("review") or {}
+        rec = {"time": datetime.datetime.now().isoformat(timespec="seconds"), "plan": Path(body["plan"]).name,
+               "page": int(body.get("page", 1)), "in_per_ft": body.get("in_per_ft"), "pt": pt,
+               "user_rough": user_rough, "claude_trace": res.get("rough_pt"), "method": res.get("method"),
+               "fitted_before_review": rev.get("before_pt"), "review_changed": rev.get("changed"),
+               "review_kept_claude": rev.get("kept_review"), "review_problems": rev.get("problems"),
+               "final": res.get("outline_pt"), "area_sf": room.get("area_sf"), "usage": res.get("usage")}
+        d = ROOT / "work"
+        d.mkdir(exist_ok=True)
+        with open(d / "ai_traces.jsonl", "a") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception as e:
+        print(f"  trace log failed: {e}", flush=True)
+
+
 def api_ai_trace(_q, body):
     """Claude traces the rooms the user clicked inside: no whole-sheet reading, one request per
     room. body: plan, page, in_per_ft, points (PDF points), plus the detect settings."""
@@ -333,6 +352,7 @@ def api_ai_trace(_q, body):
                 "candidates_pt": res.get("candidates_pt"), "candidate_kinds": res.get("candidate_kinds")}
         room["area_sf"] = round(room_area_pt(room) / ppf ** 2, 1)
         out.append(room)
+        _log_trace(body, p, rough_of.get(id(p)), res, room)
     pr, pc = ai.price(model), ai.price(ai_outline.CHECK_MODEL)
     cost = (tok_in * pr[0] + tok_out * pr[1] + chk_in * pc[0] + chk_out * pc[1]) / 1e6 if pr and pc else None
     secs = round((datetime.datetime.now() - t0).total_seconds(), 1)
