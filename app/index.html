@@ -485,15 +485,15 @@ async function loadFile(f){
   try{
     const res = await fetch(`/api/upload?name=${encodeURIComponent(f.name)}`, {method:"POST", body:await f.arrayBuffer()});
     const data = await res.json(); if(!res.ok) throw new Error(data.error);
-    await openPlan(data.plan, 1, true);
+    await openPlan(data.plan, 1, false);
     loadRecent();
   }catch(err){ flash(err.message || String(err), 7000); }
   busy(false);
 }
 $("pageSel").onchange = async e => { busy(true,"Rendering page…"); await nextFrame();
-  try{ await openPlan(S.plan, +e.target.value, true); }catch(err){ flash(err.message,7000); } busy(false); };
+  try{ await openPlan(S.plan, +e.target.value, false); }catch(err){ flash(err.message,7000); } busy(false); };
 $("recentSel").onchange = async e => { const v=e.target.value; e.target.value=""; if(!v) return;
-  busy(true,"Opening plan…"); await nextFrame(); try{ await openPlan(v, 1, true); }catch(err){ flash(err.message,7000); } busy(false); };
+  busy(true,"Opening plan…"); await nextFrame(); try{ await openPlan(v, 1, false); }catch(err){ flash(err.message,7000); } busy(false); };
 async function loadRecent(){
   try{ const d=await api("/api/plans"); const sel=$("recentSel");
     sel.innerHTML='<option value="">Recent plans…</option>'+d.plans.map(p=>`<option>${esc(p)}</option>`).join("");
