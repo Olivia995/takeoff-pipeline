@@ -2075,7 +2075,7 @@ function renderAccess(){
     cb.onchange=()=>{ x.landing=cb.checked; renderAll(); }; lb.append(cb, "Door swings in (FIT08 landing)"); opt.append(lb);
     if(x.landing){
       // a pair of doors: the landing is one leaf deep; over 48" counts as a pair unless switched off
-      const wide=S.pxPerFt ? lenFt(x.a,x.b)*12>48 : false, isPair=x.pair==null?wide:x.pair;
+      const wide=S.pxPerFt ? lenFt(x.a,x.b)*12>=47.5 : false, isPair=x.pair==null?wide:x.pair;
       const lp=document.createElement("label"), cp=document.createElement("input"); cp.type="checkbox"; cp.checked=isPair;
       cp.onchange=()=>{ x.pair=cp.checked; renderAll(); };
       lp.append(cp, "Pair of doors (landing one leaf deep)"+(x.pair==null?" · auto":"")); opt.append(lp);
