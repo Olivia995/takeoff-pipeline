@@ -199,7 +199,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:10px
 .mnotes li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
 .mnotes input{margin-top:2px;accent-color:var(--accent)}
 .mnotes .w{display:block;color:var(--muted);font-size:11.5px}
-.viewport.t-split{cursor:crosshair}
+.viewport.t-split,.viewport.t-line,.viewport.t-trim,.viewport.t-rough{cursor:crosshair}
 .rooms li.active{background:var(--sunk);box-shadow:inset 3px 0 0 var(--accent)}
 .rooms input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .rooms input[type=text]{border:1px solid transparent;background:none;padding:3px 5px;width:100%;min-width:0}
@@ -1169,8 +1169,8 @@ vp.addEventListener("pointermove",e=>{
   if(pinch && ptrs.size===2){ const [a,b]=[...ptrs.values()], r=vp.getBoundingClientRect();
     const d=Math.hypot(a.x-b.x,a.y-b.y); zoomAt((pinch.z*d/pinch.d)/S.view.z,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top); return; }
   const p=toImg(e);
-  S.hover = ["draw","exclude","measure","column","barrier","cal","split","access"].includes(S.tool) && !drag ? snapPt(p,e) : p;
-  if(!["draw","exclude","measure","column","barrier","cal","split","access"].includes(S.tool) && !(drag&&drag.vertex)) S.snapMark=null;
+  S.hover = ["draw","exclude","measure","column","barrier","cal","split","access","line"].includes(S.tool) && !drag ? snapPt(p,e) : p;
+  if(!["draw","exclude","measure","column","barrier","cal","split","access","line"].includes(S.tool) && !(drag&&drag.vertex)) S.snapMark=null;
   if(drag){
     const dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
     if(!drag.moved && Math.hypot(dx,dy)>4) drag.moved=true;

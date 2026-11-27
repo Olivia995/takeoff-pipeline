@@ -575,6 +575,8 @@ def _fill_once(page, rough, seed, pt_ft, reach_ft=6.0, deep_ft=5.0, openings=Non
         wall &= ~(cv2.dilate(core, np.ones((kb, kb), np.uint8)) > 0)
     # (after the step above, so a shaft isn't taken for a hidden fill)
     for bx0, by0, bx1, by1 in _x_boxes(page):         # shafts and floor openings: no floor in them
+        if min(bx1 - bx0, by1 - by0) < 2.0 * pt_ft:
+            continue                                  # a small X is a symbol (change in floor finish), not a shaft
         X0, Y0, X1, Y1 = int(bx0 * s) - x0, int(by0 * s) - y0, int(bx1 * s) - x0, int(by1 * s) - y0
         if X1 > 0 and Y1 > 0 and X0 < wall.shape[1] and Y0 < wall.shape[0]:
             wall[max(0, Y0):max(0, Y1), max(0, X0):max(0, X1)] = 1

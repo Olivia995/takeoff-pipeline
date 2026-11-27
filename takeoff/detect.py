@@ -69,6 +69,76 @@ def _drawings(page):
     return _cached(("drawings", _page_key(page)), page.get_drawings)
 
 
+def _x_mark_piece(d, max_pt=24.0):
+    """Is this filled shape (part of) an X symbol, e.g. "change in floor finish"? Such symbols are
+    drawn at paper size (under about 1/3" whatever the scale) as small filled shapes whose edges
+    all run at about 45° (two V halves on IA310). Wall poché and columns run square."""
+    r = d["rect"]
+    if max(r.width, r.height) > max_pt or min(r.width, r.height) < 2.0:
+        return False
+    items = d["items"]
+    if not 3 <= len(items) <= 12 or any(it[0] != "l" for it in items):
+        return False
+    for it in items:
+        a, b = it[1], it[2]
+        dx, dy = abs(b.x - a.x), abs(b.y - a.y)
+        if dx + dy < 0.2:
+            continue
+        ang = math.degrees(math.atan2(dy, dx))
+        if not 35 <= ang <= 55:
+            return False
+    return True
+
+
+def _dash_strokes(drawings, max_len=30.0, min_run=4):
+    """ids of the drawings that are dashes of a dashed line drawn dash by dash (IA310's heavy
+    finish boundary: 18 pt dashes): single short straight strokes, each in line with another of
+    about the same length a gap of up to 3 dash lengths away, in runs of at least min_run. A lone
+    short stroke, or two wall pieces either side of a doorway, stay."""
+    segs = []
+    for d in drawings:
+        its = d["items"]
+        if d.get("type") != "s" or len(its) != 1 or its[0][0] != "l":
+            continue
+        a, b = its[0][1], its[0][2]
+        L = math.hypot(b.x - a.x, b.y - a.y)
+        if 0.3 < L <= max_len:
+            segs.append((id(d), a, b, L))
+    cell = 4 * max_len
+    grid = {}
+    for k, (_i, a, b, _L) in enumerate(segs):
+        grid.setdefault((int((a.x + b.x) / 2 // cell), int((a.y + b.y) / 2 // cell)), []).append(k)
+    parent = list(range(len(segs)))
+
+    def find(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+    for k, (_i, a, b, L) in enumerate(segs):
+        ux, uy = (b.x - a.x) / L, (b.y - a.y) / L
+        mx, my = (a.x + b.x) / 2, (a.y + b.y) / 2
+        gx, gy = int(mx // cell), int(my // cell)
+        for nx in (gx - 1, gx, gx + 1):
+            for ny in (gy - 1, gy, gy + 1):
+                for j in grid.get((nx, ny), ()):
+                    if j <= k:
+                        continue
+                    _i2, a2, b2, L2 = segs[j]
+                    if abs(L2 - L) > 0.25 * max(L, L2):
+                        continue
+                    if abs((b2.x - a2.x) / L2 * uy - (b2.y - a2.y) / L2 * ux) > 0.05:
+                        continue                      # not parallel
+                    vx, vy = (a2.x + b2.x) / 2 - mx, (a2.y + b2.y) / 2 - my
+                    along, off = abs(vx * ux + vy * uy), abs(vx * uy - vy * ux)
+                    if off < 0.3 and L < along <= 4 * L:
+                        parent[find(j)] = find(k)
+    runs = {}
+    for k in range(len(segs)):
+        runs.setdefault(find(k), []).append(k)
+    return {segs[k][0] for ks in runs.values() if len(ks) >= min_run for k in ks}
+
+
 def _wall_mask_vector(page, scale, min_stroke_pt, max_fill_lum, max_stroke_lum, orth_only, min_len_pt, curves=True,
                       skip=None):
     """Wall mask drawn from the PDF's vector line work instead of the rendered image.
@@ -87,7 +157,10 @@ def _wall_mask_vector(page, scale, min_stroke_pt, max_fill_lum, max_stroke_lum, 
     kept = 0
     erase_min = 0.0003 * page.rect.width * page.rect.height
     big_fill = 0.01 * page.rect.width * page.rect.height
+    dashes = _dash_strokes(drawings)
     for d in drawings:
+        if id(d) in dashes:
+            continue                                  # a heavy dashed line (a finish/zone boundary), not a wall
         col, fill, w = d.get("color"), d.get("fill"), d.get("width") or 0
         stroke_ok = _gray(col) and w >= min_stroke_pt and sum(col) / 3 <= max_stroke_lum
         fill_ok = _gray(fill) and sum(fill) / 3 <= max_fill_lum
@@ -112,6 +185,8 @@ def _wall_mask_vector(page, scale, min_stroke_pt, max_fill_lum, max_stroke_lum, 
             stroke_ok = True
         if not (stroke_ok or fill_ok):
             continue
+        if fill_ok and _x_mark_piece(d):
+            continue                                  # a "change in floor finish" X, not a wall
         for it in d["items"]:
             if skip is not None and stroke_ok and not fill_ok and skip(it):
                 continue                              # e.g. a tag's outline (ai_outline.tag_filter)
