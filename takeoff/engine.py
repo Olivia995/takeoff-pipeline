@@ -451,6 +451,10 @@ def compute(cat, rooms, manual_notes=(), transitions=None, pt_per_ft=None):
                     fire("fashm_exclusive", p["display"])
                 else:
                     adh = "FAS1"
+            elif p.get("adhesive") in A.get("fas1_per_sf", {}):
+                # xFIT: FAS1 straight from the ordered SF (Pliteq: xFIT100 SF x 1291/132000)
+                adh = "FAS1"
+                need = area * (A["onto_ff_multiplier"] if onto_ff else 1) * A["fas1_per_sf"][p["adhesive"]]
             elif p.get("adhesive") == "plank":
                 adh, need = "FAS3", area * (A["onto_ff_multiplier"] if onto_ff else 1) / A["fas3_sf_per_pail"]
             else:

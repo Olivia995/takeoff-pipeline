@@ -69,6 +69,11 @@ adhesive:
   # 15' strip waste, so it isn't used): Hillsboro 322 SF -> 1.1, HUMN ~2650 SF -> 8.7,
   # Anytime Fitness 897 SF on FFNC -> 3.0.
   turf_fas1_sf_per_pail: 300
+  # xFIT tiles: FAS1 pails straight from the SF (Pliteq, Nov 2026):
+  # xFIT100 = SF x 1291/132000, xFIT70 = SF x 763/132000. xFIT30: no rate yet.
+  fas1_per_sf:
+    xfit100: 0.009780303030303031   # 1291 / 132000
+    xfit70: 0.005780303030303030    # 763 / 132000
   # FAS3 (planks, LVT, VersaRUBBER ELITE, Envy): SF per pail.
   fas3_sf_per_pail: 600
   # Plywood that is explicitly glued (FAS1 SF per pail).
